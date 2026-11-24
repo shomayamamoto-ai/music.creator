@@ -22,6 +22,7 @@ import { aggregateStats, lyricStats } from './lyricstats.js';
 import { KNOWLEDGE, CONFIDENCE_LABEL, CREATOR_RULES, SUNO_RIGHTS_NOTE, SUNO_FACTS } from './knowledge.js';
 import { GENRES, genreById, genreToText } from './genres.js';
 import { SAMPLE_SONG } from './sample.js';
+import { DAWS, SUNO_EXPORT_FACTS, dawById, dawToText } from './daw.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) =>
@@ -1284,6 +1285,7 @@ function showFeedback(fb, base = null) {
       <tbody>${(fb.diagnosis || []).map((d) => `<tr><td>${esc(d.symptom)}</td><td>${esc(d.cause)}</td><td>${esc(d.fix)}</td></tr>`).join('')}</tbody>
     </table></div>
     ${fb.suno_settings ? `<div class="verdict"><b>Advanced 設定の目安:</b>${esc(fb.suno_settings)}</div>` : ''}
+    ${arr(fb.daw_steps).length ? `<h4>${esc(dawById(settings().daw)?.name || 'DAW')}での直し方</h4><ol>${arr(fb.daw_steps).map((x) => `<li>${esc(x)}</li>`).join('')}</ol>` : ''}
     <h4>変えてはいけない点</h4>
     <ul>${(fb.keep || []).map((k) => `<li>${esc(k)}</li>`).join('')}</ul>
     <h4>次の生成で試すこと</h4>
@@ -1680,6 +1682,7 @@ function applyImport(mode) {
       geminiModel: pick(incoming.geminiModel, cur.geminiModel),
       claudeEffort: ['low', 'medium', 'high', 'xhigh', 'max'].includes(incoming.claudeEffort) ? incoming.claudeEffort : cur.claudeEffort,
       autoReview: typeof incoming.autoReview === 'boolean' ? incoming.autoReview : cur.autoReview,
+      daw: ['', 'garageband', 'logic'].includes(incoming.daw) ? incoming.daw : cur.daw,
     });
   }
   setStatus('backup-status', '読み込みました。画面を読み込み直します…', 'ok');
@@ -1794,6 +1797,7 @@ function loadSettingsForm() {
   $('s-gemini-key').value = s.geminiKey || '';
   $('s-gemini-model').value = s.geminiModel;
   $('s-auto-review').checked = s.autoReview;
+  $('s-daw').value = s.daw || '';
 }
 
 function saveSettingsForm() {
@@ -1804,8 +1808,11 @@ function saveSettingsForm() {
     geminiKey: $('s-gemini-key').value.trim(),
     geminiModel: $('s-gemini-model').value.trim() || DEFAULTS.geminiModel,
     autoReview: $('s-auto-review').checked,
+    daw: $('s-daw').value,
   });
   updateChrome();
+  applyDaw();
+  renderDawGuide();
   toast('設定を保存しました');
 }
 
@@ -2147,6 +2154,47 @@ function applyGenre() {
   $('e-genre-note').textContent = g ? `ジャンルの型「${g.label}」を補強にも使います(STEP 2 で変更できます)。` : '';
 }
 
+// ---------- DAW(GarageBand / Logic Pro) ----------
+function applyDaw() {
+  P.setDaw(dawToText(dawById(settings().daw)));
+}
+
+const factHtml = (f) =>
+  `<div class="fact"><span class="lbl ${f.label === '公式' ? 'official' : ''}">${esc(f.label)}</span>${esc(f.text)}
+    <br /><a href="${esc(f.url)}" target="_blank" rel="noopener">出典</a></div>`;
+
+function renderDawGuide() {
+  const mine = settings().daw;
+  const cards = DAWS.map(
+    (d) => `<div class="daw-card ${d.id === mine ? 'mine' : ''}">
+      <h4>${esc(d.name)}${d.id === mine ? '<span class="agree yes">設定中</span>' : ''}</h4>
+      <p class="price">${esc(d.price)}</p>
+      <p class="who">向いている人:${esc(d.who)}</p>
+      <b>できること</b><ul>${d.canDo.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
+      <b>できないこと</b><ul>${d.cannotDo.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
+    </div>`,
+  ).join('');
+  $('daw-guide').innerHTML = `
+    <p class="hint">Suno の曲を「もう一歩」仕上げたいときに使う、Apple の音楽制作ソフトです。価格は変わることがあるので、購入前に App Store で確認してください(2026年11月時点の情報)。</p>
+    <div class="daw-cards">${cards}</div>
+    <h4>Suno から DAW へ:基本の流れ</h4>
+    <ol class="daw-flow">
+      <li>Suno でできた曲を WAV(またはステム)でダウンロードする(Pro・Premier)</li>
+      <li>DAW に読み込み、すべての音を曲の頭(0小節目)にそろえて並べる</li>
+      <li>長さを整え、気になる部分を差し替える・自分の声や楽器を重ねる</li>
+      <li>音量をそろえ、Logic Pro なら Mastering Assistant で仕上げる</li>
+      <li>書き出して、STEP 6 の公開の準備へ</li>
+    </ol>
+    <p class="hint">「設定」で使う DAW を選ぶと、STEP 5 の診断に「その DAW での直し方」も出るようになります。</p>
+    <details><summary>出典と詳しい情報</summary>
+      ${SUNO_EXPORT_FACTS.map(factHtml).join('')}
+      ${DAWS.flatMap((d) => d.facts.map((f) => ({ ...f, text: `${d.name}:${f.text}` }))).map(factHtml).join('')}
+    </details>`;
+  $('daw-facts').innerHTML = `<h3 class="kb-area">DAW(GarageBand / Logic Pro)の情報(2026年11月時点)</h3>
+    ${SUNO_EXPORT_FACTS.map(factHtml).join('')}
+    ${DAWS.flatMap((d) => d.facts.map((f) => ({ ...f, text: `${d.name}:${f.text}` }))).map(factHtml).join('')}`;
+}
+
 // ---------- はじめての案内・サンプル曲 ----------
 function renderOnboarding() {
   $('onboarding').hidden = store.get('onboarded', false);
@@ -2309,6 +2357,12 @@ function init() {
   bind();
   bindViewSwitch();
   applyGenre();
+  applyDaw();
+  try {
+    renderDawGuide();
+  } catch (err) {
+    console.error(err);
+  }
   renderOnboarding();
   setupPwa();
   renderUsageTotals();

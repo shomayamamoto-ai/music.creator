@@ -448,6 +448,10 @@
         </details>
         <div id="f-status" class="status" hidden></div>
         <div id="feedback-result"></div>
+        <details class="daw-guide-wrap">
+          <summary>DAW(GarageBand / Logic Pro)で仕上げる</summary>
+          <div id="daw-guide"></div>
+        </details>
       </section>
 
       <!-- 6 公開の準備(Claude) -->
@@ -514,6 +518,7 @@
         </div>
         <div id="rules-view"></div>
         <div id="suno-facts"></div>
+        <div id="daw-facts"></div>
         <div id="knowledge-view"></div>
       </section>
 
@@ -541,6 +546,13 @@
         <div class="usage-box"><b>AI の使用量</b><p id="usage-totals" class="hint"></p>
           <p class="hint">Claude の料金は Anthropic 公式の単価(Opus 5.5:100万トークンあたり入力 $4・出力 $20)から計算した目安です。正確な請求額は各社の管理画面で確認してください。</p>
           <button class="sub" id="usage-reset">累計をリセット</button></div>
+        <label class="field"><span>仕上げに使う DAW(STEP 5 の直し方に反映されます)</span>
+          <select id="s-daw">
+            <option value="">使わない(Suno だけで仕上げる)</option>
+            <option value="garageband">GarageBand(無料)</option>
+            <option value="logic">Logic Pro</option>
+          </select>
+        </label>
         <label class="check"><input type="checkbox" id="s-auto-review" /> 1曲できたら、自動で1回推敲する(Claude。時間と料金は約2倍)</label>
         <div class="actions">
           <button class="primary" id="s-save">保存</button>

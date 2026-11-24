@@ -69,6 +69,12 @@ export function setGenre(text) {
   genreBlock = text || '';
 }
 
+// 仕上げに使う DAW(main.js から setDaw で渡される)
+let dawBlock = '';
+export function setDaw(text) {
+  dawBlock = text || '';
+}
+
 // 学習した作詞スタイル(main.js から setLearnedStyle で渡される)
 let learnedStyle = '';
 export function setLearnedStyle(text) {
@@ -367,6 +373,10 @@ Suno で生成した曲の感想(と、あれば音声)を受け取り、原因�
 - 1回の修正で変えるのは、原因に関係する所だけ(何が効いたか分かるように)。
 - 全部を作り直す前に、Suno 側の機能で直せないかも try_next で提案する:
   部分の差し替え(Replace Section)、延長(Extend)、Advanced 設定(Weirdness・Style Influence)の調整など。
+- 作り手が DAW を使う場合は、Suno で作り直すより DAW で直すほうが早い症状(音量・長さ・イントロのカット・
+  一部パートの差し替え・最終的な音圧)を見分け、daw_steps にその DAW での具体的な手順を書く。
+  その DAW にない機能を前提にしない。DAW を使わない場合は daw_steps を空配列にする。
+${dawBlock ? `\n# 作り手の DAW\n${dawBlock}\n` : '\n# 作り手の DAW\nなし(Suno だけで仕上げる)\n'}
 - うまくいっている点は keep に書き、変えない。
 - 音声がある場合は、聴き取れた事実と推測を分けて書く。
 
@@ -519,7 +529,9 @@ export function systemForRelease() {
 - 媒体ごとに文化と長さを変える:X は短く問いかけ、Instagram は情景と余白、TikTok は最初の1行でつかむ、YouTube Shorts は検索される言葉を入れる。
 - ハッシュタグは、大きすぎる一般タグだけにせず、曲の内容に合う中くらいのタグを混ぜる。
 - ジャケット画像のプロンプトは、歌詞の中心モチーフを使い、文字を入れない指定にする。実在の人物・ブランド・作品名は入れない。
-- AI を使って制作した曲であることの表記や、Suno の利用規約(商用利用は有料プラン期間中に生成した曲のみ)を checklist に含める。`;
+- AI を使って制作した曲であることの表記や、Suno の利用規約(商用利用は有料プラン期間中に生成した曲のみ)を checklist に含める。
+- DAW で Apple Loops などの素材を足した場合は、その素材の利用条件(自作曲の中でのみ利用可など)の確認も checklist に含める。
+${dawBlock ? `\n# 作り手の DAW\n${dawBlock}` : ''}`;
 }
 
 export function userForRelease(song, extra) {

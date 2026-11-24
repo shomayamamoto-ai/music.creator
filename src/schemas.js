@@ -155,6 +155,7 @@ export const FEEDBACK_SCHEMA = obj({
   exclude_styles: str('直した Exclude Styles'),
   lyrics: str('直した歌詞(Suno のタグ付き。歌詞以外の問題なら元のまま)'),
   suno_settings: str('次の生成での Advanced 設定の目安(高め/低めと理由)'),
+  daw_steps: strArr('作り手が DAW(GarageBand / Logic Pro)を使う場合の、その DAW での具体的な直し方。DAW を使わない場合は空配列'),
   try_next: strArr('次の生成で試すこと(優先順)'),
   keep: strArr('今回うまくいっていて、変えてはいけない点'),
 });
