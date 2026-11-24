@@ -9,6 +9,12 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Zen+Kaku+Gothic+New:wght@500;700;900&family=Zen+Old+Mincho:wght@700;900&display=swap" />
   <link rel="stylesheet" href="style.css" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#b4473b" />
+  <link rel="icon" href="icons/favicon-32.png" sizes="32x32" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="MusicCreator" />
 </head>
 <body>
   <header class="top">
@@ -24,6 +30,7 @@
           <button type="button" role="tab" data-view="textbook" aria-selected="false">教科書</button>
         </div>
         <span id="key-state" class="key-state"></span>
+        <button type="button" id="install-btn" class="sub install-btn" hidden>ホーム画面に追加</button>
       </div>
     </div>
   </header>
@@ -165,10 +172,31 @@
           <p class="lead-s">伝えたいことを書くだけで、歌詞と Suno 用の Style を作ります。</p>
         </div>
 
+        <div id="onboarding" class="onboarding" hidden>
+          <p class="onb-tag">はじめての方へ</p>
+          <h3>3ステップで1曲できます</h3>
+          <ol class="onb-steps">
+            <li><b>APIキーを入れる</b><span>「設定」に Claude と Gemini のキーを入れます。キーがなくても、各画面の「APIキーなしで使う」から claude.ai にコピペして使えます。</span></li>
+            <li><b>伝えたいことを書く</b><span>下の欄に書いて「全自動で作る」か「量産する」を押します。</span></li>
+            <li><b>Suno に貼って、聴いて直す</b><span>STEP 4 の4欄を Suno に貼り、生成したら STEP 5 で直します。</span></li>
+          </ol>
+          <div class="actions">
+            <button class="primary" id="onb-sample">サンプル曲で試してみる</button>
+            <button class="primary ghost" id="onb-settings">設定を開く</button>
+            <button class="sub" data-help="overview">教科書で全体を見る</button>
+            <button class="sub" id="onb-close">閉じる</button>
+          </div>
+        </div>
+
         <label class="field">
           <span>伝えたいメッセージ <b class="req">必須</b></span>
           <textarea id="c-message" rows="4" placeholder="例:失敗続きでも、昨日より一歩進めたなら、それで十分だと伝えたい"></textarea>
         </label>
+        <div class="field">
+          <span>ジャンルの型(選ぶと、そのジャンルの定番が AI への指示に入ります)</span>
+          <div class="genre-chips" id="genre-chips" role="radiogroup" aria-label="ジャンルの型"></div>
+          <div id="genre-card" class="genre-card" hidden></div>
+        </div>
         <div class="grid">
           <label class="field"><span>聴いてほしい人</span><input id="c-audience" placeholder="例:就活に疲れた大学生" /></label>
           <label class="field"><span>語り手(誰が歌うか)</span><input id="c-narrator" placeholder="例:同じ道を通ってきた3つ上の先輩" /></label>
@@ -266,6 +294,7 @@
           </label>
         </div>
         <label class="field"><span>その他の希望</span><input id="e-extra" placeholder="例:サビの最後をもっと覚えやすく" /></label>
+        <p class="hint" id="e-genre-note"></p>
         <label class="check"><input type="checkbox" id="e-use-ref" /> STEP 1 の参考曲・定番プロファイルを参考にする</label>
         <div class="actions">
           <button class="primary" data-run="enhance">Gemini で補強する</button>
@@ -309,6 +338,7 @@
             <input id="o-rating-note" placeholder="Suno で聴いた感想メモ(例:サビ最高、Aメロが単調)" />
           </div>
           <div id="o-pov" class="pov"></div>
+          <div id="o-suno-settings" class="suno-settings" hidden></div>
           <div id="o-warnings"></div>
 
           <label class="field project-field"><span>プロジェクト・アルバム名(整理用・任意)</span>
@@ -478,6 +508,7 @@
           <p class="lead-s">AI への指示に毎回組み込んでいる知識です。研究は「傾向」を示すもので、必ずヒットする法則ではありません。</p>
         </div>
         <div id="rules-view"></div>
+        <div id="suno-facts"></div>
         <div id="knowledge-view"></div>
       </section>
 
@@ -507,6 +538,18 @@
           <button class="primary" id="s-save">保存</button>
           <button class="sub" id="s-clear">キーを削除</button>
         </div>
+        <div class="actions">
+          <button class="sub" id="s-sample">サンプル曲を読み込む</button>
+          <button class="sub" id="s-onboarding">はじめての案内をもう一度表示</button>
+        </div>
+        <div class="install-help">
+          <h3>スマホのホーム画面に追加する</h3>
+          <ul class="hint-list">
+            <li>iPhone(Safari):共有ボタン → 「ホーム画面に追加」</li>
+            <li>Android(Chrome):メニュー → 「アプリをインストール」または「ホーム画面に追加」</li>
+            <li>追加すると、アプリのように全画面で開けます。電波が弱くても、画面・履歴・教科書は開けます(AI での生成には通信が必要です)。</li>
+          </ul>
+        </div>
         <ul class="hint-list">
           <li>Claude の API キー:<a href="https://platform.claude.com/" target="_blank" rel="noopener">Claude Console</a> で発行</li>
           <li>Gemini の API キー:<a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a> で発行</li>
@@ -523,6 +566,10 @@
 
   <button id="to-top" type="button" aria-label="ページの先頭へ" hidden>↑</button>
   <button id="back-to-tool" type="button" hidden>← ツールに戻る</button>
+  <div id="update-bar" class="update-bar" hidden role="status">
+    <span>新しい版があります。</span>
+    <button type="button" id="update-apply">更新する</button>
+  </div>
   <div id="toast" role="status" aria-live="polite"></div>
   <script src="dist/app.js"></script>
 </body>

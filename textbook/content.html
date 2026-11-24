@@ -227,11 +227,15 @@ footer { border-top: 1px solid var(--gold) !important; }
     <h3>いちばん大事な注意:商用利用の権利</h3>
     <div class="alert">
       <p><span class="src official">公式</span>
-        Suno の<b>無料プランで作った曲は、あとから有料プランに加入しても商用利用できません</b>。
-        個別に例外対応の可能性はあるものの、保証はありません。</p>
-      <p>販売・配信・広告などに使う予定がある曲は、
-        <b>必ず有料プランに加入している期間に生成・ダウンロード</b>してください。</p>
-      <p>出典:<a href="https://help.suno.com/en/articles/2425729" target="_blank" rel="noopener">Suno Help「If I subscribe, can I distribute songs from my free plan?」</a></p>
+        Suno の<b>無料プランの曲には商用利用の権利がありません</b>(試用ダウンロードにも付きません)。
+        あとから有料プランに加入しても、無料期間の曲には原則として権利は付きません。</p>
+      <p><span class="src official">公式</span>有料プラン(Pro/Premier)の加入中に作り、Suno からダウンロードした曲は商用利用できます。
+        ただし Suno はこれを<b>「所有権を示すものではない」</b>としています。
+        また 2026年9月3日から、ダウンロードには月ごとの上限(Pro 20曲・Premier 60曲)があります。</p>
+      <p>出典(2026年11月時点):
+        <a href="https://about.suno.com/blog/suno-updates-tos" target="_blank" rel="noopener">ダウンロード方針と規約の更新(Suno 公式ブログ)</a>/
+        <a href="https://help.suno.com/en/articles/9601665" target="_blank" rel="noopener">曲の権利と所有(Suno ヘルプ)</a>/
+        <a href="https://help.suno.com/en/articles/2425729" target="_blank" rel="noopener">無料プランの曲は加入後に配信できるか(Suno ヘルプ)</a></p>
     </div>
     <h3>準備するもの</h3>
     <ol>
@@ -239,6 +243,16 @@ footer { border-top: 1px solid var(--gold) !important; }
       <li>「設定」タブで、Claude と Gemini の APIキーを入れる(なければ「キーなし」で進める)。</li>
       <li>参考にしたい曲を1〜3曲決めておく(音声ファイル、YouTube の URL、曲名のどれか)。</li>
     </ol>
+    <p>まず雰囲気をつかみたいときは、STEP 2 の「はじめての方へ」にある<b>「サンプル曲で試してみる」</b>を押してください。
+      APIキーがなくても、分析ビュー・★評価・版の管理などを試せます。</p>
+    <h3>スマホのホーム画面に追加する</h3>
+    <p>ネットに公開した Music Creator は、アプリのようにホーム画面に追加できます。</p>
+    <ul>
+      <li>iPhone(Safari):共有ボタン → 「ホーム画面に追加」</li>
+      <li>Android(Chrome):メニュー → 「アプリをインストール」(画面上部に「ホーム画面に追加」ボタンが出ることもあります)</li>
+    </ul>
+    <p>追加すると、電波が弱いときでも画面・履歴・教科書は開けます(AI での生成には通信が必要です)。
+      新しい版が出たときは、画面下に「更新する」が表示されます。</p>
     <p>APIキーは、そのブラウザの中にだけ保存されます。共用のパソコンでは、使い終わったら「キーを削除」を押してください。</p>
   </section>
 
@@ -401,6 +415,9 @@ footer { border-top: 1px solid var(--gold) !important; }
       <div class="step-body">
         <h3>Aメロ+サビを量産して選ぶ</h3>
         <p class="where">アプリ:STEP 2 →「量産する」(Claude)</p>
+        <p>先に<b>「ジャンルの型」</b>を選んでおくと、そのジャンルの定番(テンポ・構成・言葉の密度・和声・音)が AI への指示に入ります。
+          用意しているのは J-POP(王道)/バラード/ボカロ系/シティポップ/日本語ヒップホップ/アニソン の6つです。
+          テンポなどの多くは実務上の目安で、根拠と確度は画面に表示されます。</p>
         <p>10案以上を一気に作ります。案ごとに切り口(手紙型、独白型、情景描写型、逆説型など)が変わるよう指示してあります。
           スコア順に並ぶので、上から読んで選びます。</p>
         <h3>選ぶときの基準</h3>
@@ -511,12 +528,15 @@ footer { border-top: 1px solid var(--gold) !important; }
   <section class="chapter" id="suno">
     <p class="num">CHAPTER 5</p>
     <h2>Suno の書き方ルール</h2>
+    <p><span class="src official">公式</span>2026年9月から、Suno は v6 世代のモデル(v6/v6-wild/v6-mini)になりました。
+      v6 は Pro・Premier 向けの主力、v6-mini は無料でも使える最速版、v6-wild は変化の大きい探索向けです。</p>
     <h3>Style of Music 欄</h3>
     <ul>
       <li>英語のタグを、カンマ区切りで書く。目安は8〜15個。</li>
       <li>並び順は「ジャンル → ムード → ボーカル → 楽器 → リズム・BPM → 音作り」。</li>
       <li>ボーカルの指定は前半に置く(後ろだと無視されやすいという報告がある)。<span class="src practice">実務知識</span></li>
-      <li><b>実在のアーティスト名・曲名は入れない</b>。「年代・楽器・声質・テンポ」で言い換える。<span class="src practice">実務知識</span></li>
+      <li><b>実在のアーティスト名・曲名は、Title・Style・Lyrics のどの欄にも入れない</b>。Suno は公式に許可していません。「年代・楽器・声質・テンポ」で言い換えます。<span class="src official">公式</span></li>
+      <li>上限は約1,000字ですが、200〜400字程度に絞ると意図が伝わりやすいとされています。<span class="src practice">実務知識</span></li>
       <li>矛盾するタグを同時に入れない(例:calm と aggressive)。</li>
     </ul>
     <pre class="block">J-pop, rock ballad, emotional, husky male vocal, belting chorus,
@@ -528,8 +548,17 @@ piano, clean electric guitar, live drums, 82 BPM, wide stereo, warm mix</pre>
       <li>タグには短い演出を添えられる。例:<code>[Bridge: whisper, sparse]</code></li>
       <li>演出の長い説明文は書かない(歌われてしまうことがある)。<span class="src practice">実務知識</span></li>
       <li>サビは毎回すべて書く。「[Chorus x2]」のような省略はしない。</li>
+      <li>タグは「命令」ではなく「影響」です。特に [Intro] は無視されやすく、器楽のイントロが自動で付くことがあります。<span class="src practice">実務知識</span></li>
       <li>読み間違えやすい漢字(明日、今日、など)はひらがなにする。<span class="src practice">実務知識</span></li>
     </ul>
+    <h3>Advanced 設定と部分的な直し</h3>
+    <ul>
+      <li><b>Weirdness</b>:どこまで冒険させるか。王道にしたいなら低め。</li>
+      <li><b>Style Influence</b>:Style 欄にどれだけ従うか。指定どおりにしたいなら高め。</li>
+      <li><b>Exclude styles</b>:避けたい要素の「目安」。必ず効くわけではありません。</li>
+      <li>一部だけ直したいときは、作り直す前に <b>Replace Section</b>(部分の差し替え)や <b>Extend</b>(延長)を試します。</li>
+    </ul>
+    <p>アプリは曲ごとに「Advanced 設定の目安」も出します。数値の正解は公表されていないため、「高め/低め」と理由で示しています。<span class="src practice">実務知識</span></p>
     <h3>文字数の目安</h3>
     <p>v4.5 以降のモデルでは、Style が約1,000文字、Lyrics が約5,000文字とする解説が多数あります。<span class="src practice">実務知識</span><br>
       ただし Suno の公式ドキュメントでの明記は確認できませんでした。
@@ -643,7 +672,7 @@ piano, clean electric guitar, live drums, 82 BPM, wide stereo, warm mix</pre>
       <li><label><input type="checkbox" id="ck7"><span>言葉の詰め方・ハモリの重ね方が曲調に合っている(無理に入れていない)</span></label></li>
       <li><label><input type="checkbox" id="ck8"><span>削っても意味が変わらない言葉を削った</span></label></li>
       <li><label><input type="checkbox" id="ck9"><span>イントロが短く、最初の5秒で何かが起きる</span></label></li>
-      <li><label><input type="checkbox" id="ck10"><span>Style にアーティスト名・曲名が入っていない</span></label></li>
+      <li><label><input type="checkbox" id="ck10"><span>どの欄にもアーティスト名・曲名が入っていない</span></label></li>
       <li><label><input type="checkbox" id="ck11"><span>サビを省略せず、毎回すべて書いている</span></label></li>
       <li><label><input type="checkbox" id="ck12"><span>誤字脱字・表記ゆれ・読み間違いやすい漢字がない</span></label></li>
       <li><label><input type="checkbox" id="ck13"><span>生成した曲に★と感想メモを付けた(好みの学習に使う)</span></label></li>

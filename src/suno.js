@@ -29,6 +29,9 @@ export function normalizeStyle(style) {
 // 貼り付け前の警告(エラーではなく注意喚起)
 export function lintSong({ title, style, lyrics }) {
   const warnings = [];
+  if ((style || '').length > 400 && (style || '').length <= LIMITS.style) {
+    warnings.push(`Style が ${style.length} 文字です。上限内ですが、200〜400字程度に絞ると意図が伝わりやすいとされています(引き算)。`);
+  }
   if ((style || '').length > LIMITS.style) {
     warnings.push(`Style が ${style.length} 文字です。${LIMITS.style} 文字を超えると末尾が切れる恐れがあります。`);
   }

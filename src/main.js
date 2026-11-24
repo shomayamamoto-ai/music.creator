@@ -19,7 +19,9 @@ import { analyzeLyrics } from './mora.js';
 import { LIMITS, lintSong, lintLyricsQuality, normalizeLyrics, normalizeStyle, toCopyBlock } from './suno.js';
 import { analyzeLocally, fileToBase64 } from './audio.js';
 import { aggregateStats, lyricStats } from './lyricstats.js';
-import { KNOWLEDGE, CONFIDENCE_LABEL, CREATOR_RULES, SUNO_RIGHTS_NOTE } from './knowledge.js';
+import { KNOWLEDGE, CONFIDENCE_LABEL, CREATOR_RULES, SUNO_RIGHTS_NOTE, SUNO_FACTS } from './knowledge.js';
+import { GENRES, genreById, genreToText } from './genres.js';
+import { SAMPLE_SONG } from './sample.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) =>
@@ -1087,6 +1089,7 @@ function showFeedback(fb) {
       <thead><tr><th>症状</th><th>原因</th><th>直し方</th></tr></thead>
       <tbody>${(fb.diagnosis || []).map((d) => `<tr><td>${esc(d.symptom)}</td><td>${esc(d.cause)}</td><td>${esc(d.fix)}</td></tr>`).join('')}</tbody>
     </table></div>
+    ${fb.suno_settings ? `<div class="verdict"><b>Advanced 設定の目安:</b>${esc(fb.suno_settings)}</div>` : ''}
     <h4>変えてはいけない点</h4>
     <ul>${(fb.keep || []).map((k) => `<li>${esc(k)}</li>`).join('')}</ul>
     <h4>次の生成で試すこと</h4>
@@ -1097,7 +1100,7 @@ function showFeedback(fb) {
     </div>
     <div class="actions"><button class="primary" id="f-apply">この修正版を STEP 4 に反映する(新しい版として保存)</button></div>`;
   $('f-apply').onclick = () => {
-    const merged = { ...state.song, title: fb.title || state.song.title, style: fb.style, exclude_styles: fb.exclude_styles, lyrics: fb.lyrics || state.song.lyrics };
+    const merged = { ...state.song, title: fb.title || state.song.title, style: fb.style, exclude_styles: fb.exclude_styles, lyrics: fb.lyrics || state.song.lyrics, suno_settings: fb.suno_settings || state.song.suno_settings };
     setSong(merged, '聴いて直す', { revision: true });
   };
 }
@@ -1171,6 +1174,8 @@ function renderSong() {
   $('o-lyrics').value = s.lyrics;
   updateCounts();
   renderStars();
+  $('o-suno-settings').hidden = !s.suno_settings;
+  $('o-suno-settings').innerHTML = s.suno_settings ? `<b>Suno の Advanced 設定の目安:</b>${esc(s.suno_settings)}` : '';
   renderCritique(s);
   state.selectedLine = null;
   renderLyricView();
@@ -1431,7 +1436,17 @@ function renderReleaseHeader() {
     : 'まだ曲がありません。STEP 2 か 3 で作るか、「作品と履歴」から開いてください。';
 }
 
+function renderSunoFacts() {
+  $('suno-facts').innerHTML = `<h3 class="kb-area">Suno の現行仕様(2026年11月時点)</h3>
+    <p class="hint">「公式」は Suno 自身のページ、「二次」は解説サイトなどの情報です。Suno の仕様はよく変わるので、気になる点は公式で確認してください。</p>
+    ${SUNO_FACTS.map(
+      (f) => `<div class="fact"><span class="lbl ${f.label === '公式' ? 'official' : ''}">${esc(f.label)}</span>${esc(f.text)}
+        <br /><a href="${esc(f.url)}" target="_blank" rel="noopener">出典</a></div>`,
+    ).join('')}`;
+}
+
 function renderKnowledge() {
+  renderSunoFacts();
   $('rules-view').innerHTML = `<h3>制作ルール(毎回 AI に渡しています)</h3><div class="rules">${esc(CREATOR_RULES.trim())}</div>`;
   const areas = [...new Set(KNOWLEDGE.map((k) => k.area))];
   $('knowledge-view').innerHTML = areas
@@ -1538,6 +1553,28 @@ function bind() {
   $('r-paste-load').onclick = () => loadPasted('r-paste', 'r-status', (data) => setSong(data, 'Claude 推敲(コピペ)', { revision: true }));
   $('f-paste-load').onclick = () => loadPasted('f-paste', 'f-status', showFeedback);
   $('a-local').onclick = runLocalOnly;
+  $('genre-chips').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-genre]');
+    if (!b) return;
+    store.set('genre', b.dataset.genre);
+    applyGenre();
+  });
+  $('onb-sample').onclick = () => {
+    store.set('onboarded', true);
+    renderOnboarding();
+    loadSample();
+  };
+  $('onb-settings').onclick = () => switchTab('settings');
+  $('onb-close').onclick = () => {
+    store.set('onboarded', true);
+    renderOnboarding();
+  };
+  $('s-sample').onclick = loadSample;
+  $('s-onboarding').onclick = () => {
+    store.set('onboarded', false);
+    renderOnboarding();
+    switchTab('compose');
+  };
   $('v-paste-load').onclick = () => loadPasted('v-paste', 'v-status', showVariants);
   $('pref-paste-load').onclick = () => loadPasted('pref-paste', 'pref-status', setPreferenceResult);
   $('pref-clear').onclick = () => {
@@ -1761,6 +1798,74 @@ function bind() {
   toTop.onclick = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+// ---------- ジャンルの型 ----------
+function applyGenre() {
+  const g = genreById(store.get('genre', ''));
+  P.setGenre(genreToText(g));
+  $('genre-chips').innerHTML = [{ id: '', label: 'おまかせ' }, ...GENRES]
+    .map((x) => `<button type="button" role="radio" data-genre="${x.id}" aria-checked="${(g?.id || '') === x.id}">${esc(x.label)}</button>`)
+    .join('');
+  $('genre-card').hidden = !g;
+  $('genre-card').innerHTML = g
+    ? `<dl><dt>テンポ</dt><dd>${esc(g.tempo)}</dd><dt>構成</dt><dd>${esc(g.structure)}</dd><dt>歌詞</dt><dd>${esc(g.lyrics)}</dd>
+        <dt>和声</dt><dd>${esc(g.harmony)}</dd><dt>音</dt><dd>${esc(g.sound)}</dd></dl>
+       <p class="src-note">根拠と確度:${esc(g.note)}</p>`
+    : '';
+  $('e-genre-note').textContent = g ? `ジャンルの型「${g.label}」を補強にも使います(STEP 2 で変更できます)。` : '';
+}
+
+// ---------- はじめての案内・サンプル曲 ----------
+function renderOnboarding() {
+  $('onboarding').hidden = store.get('onboarded', false);
+}
+
+function loadSample() {
+  setSong({ ...SAMPLE_SONG }, 'サンプル');
+  toast('サンプル曲を読み込みました。分析ビューや★評価を試せます');
+}
+
+// ---------- アプリ化(PWA) ----------
+let installPrompt = null;
+function setupPwa() {
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    installPrompt = e;
+    $('install-btn').hidden = false;
+  });
+  $('install-btn').onclick = async () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    await installPrompt.userChoice.catch(() => null);
+    installPrompt = null;
+    $('install-btn').hidden = true;
+  };
+  window.addEventListener('appinstalled', () => ($('install-btn').hidden = true));
+  // サービスワーカーは http(s) で公開しているときだけ使う(ファイルを直接開いたときは使わない)
+  if (!('serviceWorker' in navigator) || !/^https?:$/.test(location.protocol)) return;
+  navigator.serviceWorker
+    .register('sw.js')
+    .then((reg) => {
+      const offer = (worker) => {
+        $('update-bar').hidden = false;
+        $('update-apply').onclick = () => worker.postMessage('skipWaiting');
+      };
+      if (reg.waiting && navigator.serviceWorker.controller) offer(reg.waiting);
+      reg.addEventListener('updatefound', () => {
+        const w = reg.installing;
+        w?.addEventListener('statechange', () => {
+          if (w.state === 'installed' && navigator.serviceWorker.controller) offer(w);
+        });
+      });
+    })
+    .catch(() => {});
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloading) return;
+    reloading = true;
+    location.reload();
+  });
+}
+
 // ---------- ツール / 教科書の切り替え ----------
 let pendingAnchor = null;
 let textbookReady = false;
@@ -1842,8 +1947,8 @@ function renderRightsBanner() {
   }
   el.hidden = false;
   el.innerHTML =
-    `<p><b>商用利用の注意:</b>${esc(SUNO_RIGHTS_NOTE.text)} ` +
-    `<a href="${SUNO_RIGHTS_NOTE.url}" target="_blank" rel="noopener">Suno 公式ヘルプ</a></p>` +
+    `<div class="notice-body"><p><b>商用利用の注意(2026年11月時点):</b>${esc(SUNO_RIGHTS_NOTE.text)}</p>` +
+    `<ul>${SUNO_RIGHTS_NOTE.links.map(([t, u]) => `<li><a href="${u}" target="_blank" rel="noopener">${esc(t)}</a></li>`).join('')}</ul></div>` +
     '<button type="button" id="rights-close">理解した</button>';
   $('rights-close').onclick = () => {
     store.set('rightsDismissed', true);
@@ -1860,6 +1965,9 @@ function init() {
   applyPreference();
   bind();
   bindViewSwitch();
+  applyGenre();
+  renderOnboarding();
+  setupPwa();
   restoreDrafts();
   loadSettingsForm();
   renderKnowledge();

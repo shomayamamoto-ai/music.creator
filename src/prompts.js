@@ -3,21 +3,26 @@
 import { knowledgeForPrompt, CREATOR_RULES } from './knowledge.js';
 
 const SUNO_RULES = `
-# Suno への出力ルール(厳守)
-- style(Style of Music 欄):英語のタグをカンマ区切りで。1000文字以内、目安は8〜15タグ。
+# Suno への出力ルール(厳守。2026年11月時点の v6 世代を前提)
+- style(Style of Music 欄):英語のタグをカンマ区切りで。上限は約1000字だが、200〜400字程度に収める(引き算)。
   並び順は「ジャンル → サブジャンル → ムード → ボーカル(性別・声質・歌い方)→ 主要楽器 → リズム/BPM → 音作り・ミックス」。
   ボーカル指定は前半に置く(後ろに埋もれると無視されやすいという実務上の報告があるため)。
-- style に実在アーティスト名・曲名・バンド名は絶対に入れない。音の特徴(年代、楽器、声質、テンポ)で言い換える。
-- exclude_styles:入ってほしくない要素(例:autotune, EDM drop, heavy distortion)。不要なら空文字。
-- lyrics(Lyrics 欄):歌う言葉と、行頭の [ ] タグだけを書く。
+- 実在のアーティスト名・曲名・バンド名・商標は、Title・Style・Lyrics のどの欄にも入れない(Suno が公式に許可していない)。
+  音の特徴(年代、楽器、声質、テンポ)で言い換える。
+- exclude_styles:入ってほしくない要素(例:autotune, EDM drop, heavy distortion)。効く保証はない「目安」として使う。不要なら空文字。
+- lyrics(Lyrics 欄):歌う言葉と、行頭の [ ] タグだけを書く。タグは命令ではなく「影響」なので、構成そのものを言葉の量と配置で作る。
   使うタグの例:[Intro] [Verse 1] [Pre-Chorus] [Chorus] [Verse 2] [Bridge] [Final Chorus] [Outro] [Instrumental Break]
   タグには短い演出を添えてよい(例:[Chorus: full band, powerful] [Bridge: whisper, sparse])。
+- [Intro] は無視されやすく、器楽イントロが自動で付くことがある。イントロは短く指定し、長い前奏を前提にしない。
 - 演出の長い説明文を歌詞の中に書かない(歌われてしまうため)。合いの手やコーラスは ( ) で短く。
 - サビは毎回フルで書く。「[Chorus x2]」「(繰り返し)」のような省略はしない。
 - 日本語詞で読み間違えやすい漢字(例:「明日」あす/あした、「今日」きょう/こんにち)は、ひらがなにするか読みを固定する。
-- 1行は短めに(目安:日本語で12〜20文字)。息継ぎの位置で改行する。
+  助詞「は」を「ha」と歌うことがあるので、サビの重要な行では「は」を避けられるなら避ける。
+- 1行は短めに(目安:日本語で8〜20文字)。息継ぎの位置で改行する。
 - イントロは短く。聴き手は最初の数秒〜30秒で離脱を判断しやすい(ナレッジ参照)。
 - 全体は 2分30秒〜3分30秒程度に収まる分量を基本にする(依頼で指定があればそれに従う)。
+- suno_settings:Suno の Advanced 設定の目安を書く(例:Style Influence を高めにして Style に忠実に/Weirdness は低めで王道に)。
+  数値の正解は公表されていないので、「高め・低め」と理由で示す。
 `;
 
 const POV_AND_WORDS = `
@@ -58,6 +63,12 @@ const ROLE = `あなたは、ヒット曲を量産してきた日本のトップ
 音楽心理学の研究知見を、感覚ではなく根拠として使います。
 ただし、研究は「傾向」を示すもので、必ずヒットする法則ではないことを理解しています。`;
 
+// 選んだジャンルの型(main.js から setGenre で渡される)
+let genreBlock = '';
+export function setGenre(text) {
+  genreBlock = text || '';
+}
+
 // 学習した作詞スタイル(main.js から setLearnedStyle で渡される)
 let learnedStyle = '';
 export function setLearnedStyle(text) {
@@ -86,8 +97,14 @@ ${learnedStyle}
 }
 
 function common() {
+  const genre = genreBlock
+    ? `
+# 選ばれたジャンルの型(土台として守る。個性は歌詞と1点の冒険で出す)
+${genreBlock}
+`
+    : '';
   return `${CREATOR_RULES}
-${learnedBlock()}
+${genre}${learnedBlock()}
 
 ${knowledgeForPrompt()}
 
@@ -348,6 +365,8 @@ Suno で生成した曲の感想(と、あれば音声)を受け取り、原因�
 - 構成・盛り上がり・イントロの長さの問題 → 主にセクションタグと各セクションの言葉の量を直す。
 - 読み間違い・言葉の詰まり・伸びすぎ → 主に歌詞の表記と1行の長さを直す。
 - 1回の修正で変えるのは、原因に関係する所だけ(何が効いたか分かるように)。
+- 全部を作り直す前に、Suno 側の機能で直せないかも try_next で提案する:
+  部分の差し替え(Replace Section)、延長(Extend)、Advanced 設定(Weirdness・Style Influence)の調整など。
 - うまくいっている点は keep に書き、変えない。
 - 音声がある場合は、聴き取れた事実と推測を分けて書く。
 
@@ -456,6 +475,7 @@ ${song.lyrics}
 ${song.style}
 ${reference ? `\n# 参考にする楽曲要素\n${reference}` : ''}
 ${preference ? `\n# 作り手の好み\n${preference}` : ''}
+${genreBlock ? `\n# 選ばれたジャンルの型\n${genreBlock}` : ''}
 
 3案を作ってください。`;
 }

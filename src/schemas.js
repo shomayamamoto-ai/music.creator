@@ -36,6 +36,7 @@ export const SONG_SCHEMA = obj({
   style: str('Suno の Style 欄に貼る英語タグ。カンマ区切り。アーティスト名は禁止。1000文字以内'),
   exclude_styles: str('Suno の Exclude Styles 欄に貼る英語タグ。カンマ区切り。不要なら空文字'),
   lyrics: str('Suno の Lyrics 欄に貼る歌詞。[Intro][Verse 1][Pre-Chorus][Chorus] などのタグを行頭に置く。5000文字以内'),
+  suno_settings: str('Suno の Advanced 設定の目安(Weirdness・Style Influence など)を「高め/低め」と理由で'),
   psychology_notes: { type: 'array', items: psychNote, description: '使った音楽心理学の手法' },
   self_review: strArr('出力前セルフレビューで直した点・残るリスク'),
   next_steps: strArr('Suno で生成した後に試すべきこと'),
@@ -153,6 +154,7 @@ export const FEEDBACK_SCHEMA = obj({
   style: str('直した Style(英語・カンマ区切り・1000文字以内)'),
   exclude_styles: str('直した Exclude Styles'),
   lyrics: str('直した歌詞(Suno のタグ付き。歌詞以外の問題なら元のまま)'),
+  suno_settings: str('次の生成での Advanced 設定の目安(高め/低めと理由)'),
   try_next: strArr('次の生成で試すこと(優先順)'),
   keep: strArr('今回うまくいっていて、変えてはいけない点'),
 });

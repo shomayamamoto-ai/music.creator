@@ -304,10 +304,27 @@ export function knowledgeForPrompt() {
 ${lines.join('\n')}`;
 }
 
-// Suno の権利に関する注意(公式ヘルプで確認済み)
+// Suno の権利に関する注意(2026-11-24 時点。Suno 公式ブログ・ヘルプで確認)
 export const SUNO_RIGHTS_NOTE = {
   text:
-    '無料プランで作った曲は、あとから有料プランに加入しても商用利用の権利は付きません(個別に例外対応の可能性はあるが保証なし)。' +
-    '商用で使う曲は、必ず有料プランに加入している期間に生成・ダウンロードしてください。',
-  url: 'https://help.suno.com/en/articles/2425729',
+    '無料プランの曲には商用利用の権利がありません(試用ダウンロードにも付きません)。あとから有料プランに加入しても、無料期間の曲には原則として権利は付きません。' +
+    '有料プラン(Pro/Premier)の加入中に作り、Suno からダウンロードした曲は商用利用できますが、Suno はこれを「所有権を示すものではない」としています。' +
+    '2026年9月3日から、ダウンロードには月ごとの上限(Pro 20曲・Premier 60曲)があります。',
+  url: 'https://about.suno.com/blog/suno-updates-tos',
+  links: [
+    ['ダウンロード方針と規約の更新(Suno 公式ブログ)', 'https://about.suno.com/blog/suno-updates-tos'],
+    ['無料プランの曲は加入後に配信できるか(Suno ヘルプ)', 'https://help.suno.com/en/articles/2425729'],
+    ['曲の権利と所有(Suno ヘルプ)', 'https://help.suno.com/en/articles/9601665'],
+  ],
 };
+
+// Suno の現行仕様(2026-11-24 調査)。label は確度:公式=Suno自身のページ、二次=解説サイト等
+export const SUNO_FACTS = [
+  { label: '公式', text: '2026年9月に v6 世代のモデル(v6/v6-wild/v6-mini)が登場。v6 は Pro・Premier 向けの主力、v6-mini は無料でも使える最速版、v6-wild は変化の大きい探索向け。', url: 'https://help.suno.com/en/articles/13924737' },
+  { label: '公式', text: '特定のアーティスト名や著作権のある曲を指定するプロンプトは許可されていない。名前は除去され、音の特徴の記述に置き換えられる。', url: 'https://suno.com/blog/building-the-future-of-music-responsibly' },
+  { label: '二次', text: '文字数の目安(v6):歌詞 5,000字、Style 1,000字、Exclude Styles 1,000字。公式の上限表はない。Style は 200〜400字程度が扱いやすいという解説が多い。', url: 'https://hookgenius.app/learn/suno-v6-guide/' },
+  { label: '二次', text: 'Advanced 設定:Weirdness(どこまで冒険させるか)、Style Influence(Style 欄にどれだけ従うか)、Variety(Style を変化させてよいか)、Exclude styles は「目安であって保証ではない」。', url: 'https://jackrighteous.com/en-us/blogs/guides-using-suno-ai-music-creation/how-to-use-suno-s-advanced-sliders-weirdness-style-audio-influence' },
+  { label: '二次', text: 'メタタグは「命令ではなく影響」。[Intro] は無視されやすく、器楽イントロが自動で付くことがある。', url: 'https://jackrighteous.com/en-us/blogs/guides-using-suno-ai-music-creation/suno-meta-tags-basics-beginner-structure-map' },
+  { label: '二次', text: '部分的な直しは Replace Section(2案を比較可)、延長は Extend(位置を指定)。v6 では「サビだけ変える」のような指示による部分編集もできる。', url: 'https://routenote.com/radar/suno-v6-everything-you-need-to-know-about-sunos-new-ai-music-model/' },
+  { label: '二次', text: '日本語詞:音読み/訓読みの判別が苦手で、助詞「は」を「ha」と歌うことがある。誤読しやすい漢字はひらがなにする(ただし完全な解決ではない)。', url: 'https://innovatopia.jp/?p=105832' },
+];
