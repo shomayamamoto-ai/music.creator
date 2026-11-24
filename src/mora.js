@@ -83,6 +83,8 @@ export function analyzeLyrics(lyrics) {
   lines.forEach((l, i) => {
     l.prev = lines[i - 1]?.section === l.section ? lines[i - 1].text : '';
     l.next = lines[i + 1]?.section === l.section ? lines[i + 1].text : '';
+    l.prevVowel = l.prev ? lines[i - 1].vowel : null;
+    l.nextVowel = l.next ? lines[i + 1].vowel : null;
   });
   const avg = (arr) => (arr.length ? Math.round((arr.reduce((a, b) => a + b, 0) / arr.length) * 10) / 10 : null);
   const byKind = {};

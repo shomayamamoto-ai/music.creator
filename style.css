@@ -418,3 +418,22 @@ label.sub.file-btn:focus-within { outline: 2px solid var(--accent); outline-offs
 @media (max-width: 600px) { .genre-card dl { grid-template-columns: 1fr; } .genre-card dt { margin-top: 4px; } }
 .notice-body { flex: 1; min-width: 0; }
 .notice-body p { margin: 0; }
+
+/* ---- 中止・再試行・使用量 ---- */
+.status-actions { display: inline-flex; gap: 6px; margin-left: 10px; vertical-align: middle; }
+.status-actions button { min-height: 34px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--accent); font-weight: 700; font-size: 13px; }
+.usage-box { border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; margin: 8px 0 12px; background: var(--bg); }
+.usage-box p { margin: 4px 0; }
+
+/* ---- 元に戻す・作詞アシスト ---- */
+.edit-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0 4px; }
+.edit-tools .sub { min-height: 38px; }
+.edit-tools .sub:disabled { opacity: .45; cursor: default; }
+.edit-tools .hint { margin: 0; font-size: 12.5px; }
+.lv-flags { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.lv-flag { font-size: 10.5px; font-weight: 700; border-radius: 999px; padding: 0 7px; background: var(--warn-soft); color: var(--warn); white-space: nowrap; }
+.lv-line { grid-template-columns: minmax(0, 1fr) auto auto auto; }
+.assist-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+.assist-chips button { min-height: 36px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font-size: 12.5px; font-weight: 700; }
+.assist-chips button:hover { border-color: var(--accent); color: var(--accent); }
+.lv-context { font-size: 12.5px; color: var(--sub); margin: 0 0 6px; }

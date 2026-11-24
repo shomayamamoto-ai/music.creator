@@ -490,6 +490,21 @@ footer { border-top: 1px solid var(--gold) !important; }
           サビがAメロより言葉が多すぎないか、隣の行と語尾が揃っているかを一目で確認できます。
           気になる行を押すと、AI が音数をほぼ変えずに<b>その1行だけ</b>書き直し案を3つ出します。</p>
         <p class="where">漢字は読みが分からないため、漢字や英語を含む行の音数は概算(「約」と表示)です。</p>
+        <h3>作詞アシスト</h3>
+        <p>行を選ぶと、よく使う直し方のボタンが出ます(押すだけで書き直し案が3つ出ます)。</p>
+        <ul>
+          <li>前後の行と語尾の母音を揃える(前の行・次の行の語尾も表示されます)</li>
+          <li>同じ音数のまま、もっと具体的に/決まり文句を具体的な描写に置き換える</li>
+          <li>短く、口ずさみやすく/視点を曲全体と揃える/1音符に複数の音を詰めて勢いを出す</li>
+        </ul>
+        <p>決まり文句や長すぎる行には、分析ビューで印が付きます。</p>
+        <h3>安心して書き換えるために</h3>
+        <ul>
+          <li>STEP 4 の書き換えは自動で保存され、履歴の同じ版にも反映されます。</li>
+          <li>「元に戻す」「やり直す」で、手での書き換えや1行の差し替えを戻せます。</li>
+          <li>AI の処理中は「中止」で止められます。通信が切れて失敗したときは「もう一度試す」を押します。</li>
+          <li>処理が終わると、その回の使用量(Claude は料金の目安も)が表示されます。累計は「設定」で確認できます。</li>
+        </ul>
         <h3>★で評価して、好みを学習させる</h3>
         <p>Suno で聴いたら、STEP 4 で曲に★1〜5と感想メモを付けます。3曲以上たまったら、
           STEP 1 の「評価から好みを学習」を押すと、高評価と低評価の曲の違いから好みを抽出し、次の作詞と Style に反映します。
@@ -715,7 +730,8 @@ piano, clean electric guitar, live drums, 82 BPM, wide stereo, warm mix</pre>
 (function () {
   if (!/[?&]embed=1/.test(location.search) || window.parent === window) return;
   document.documentElement.classList.add('embedded');
-  function post(msg) { window.parent.postMessage(Object.assign({ source: 'mc-textbook' }, msg), '*'); }
+  var target = location.protocol === 'file:' || location.origin === 'null' ? '*' : location.origin;
+  function post(msg) { window.parent.postMessage(Object.assign({ source: 'mc-textbook' }, msg), target); }
   function sendHeight() { post({ type: 'height', height: document.documentElement.scrollHeight }); }
   function goTo(id) {
     var el = document.getElementById(id);
@@ -731,7 +747,10 @@ piano, clean electric guitar, live drums, 82 BPM, wide stereo, warm mix</pre>
     goTo(a.getAttribute('href').slice(1));
   });
   window.addEventListener('message', function (e) {
-    if (e.data && e.data.source === 'mc-app' && e.data.type === 'goto') goTo(e.data.anchor);
+    // 親(アプリ)からの連絡だけを受け取る
+    if (e.source !== window.parent) return;
+    if (location.protocol !== 'file:' && location.origin !== 'null' && e.origin !== location.origin) return;
+    if (e.data && e.data.source === 'mc-app' && e.data.type === 'goto' && typeof e.data.anchor === 'string') goTo(e.data.anchor);
   });
 })();
 (function () {

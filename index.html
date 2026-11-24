@@ -332,7 +332,7 @@
           </div>
           <div class="rating-box">
             <span class="rating-label">この曲の評価</span>
-            <div class="stars" id="o-rating" role="radiogroup" aria-label="評価(★1〜5)">
+            <div class="stars" id="o-rating" role="group" aria-label="評価(★1〜5)">
               <button type="button" data-star="1" aria-label="★1">★</button><button type="button" data-star="2" aria-label="★2">★</button><button type="button" data-star="3" aria-label="★3">★</button><button type="button" data-star="4" aria-label="★4">★</button><button type="button" data-star="5" aria-label="★5">★</button>
             </div>
             <input id="o-rating-note" placeholder="Suno で聴いた感想メモ(例:サビ最高、Aメロが単調)" />
@@ -341,6 +341,11 @@
           <div id="o-suno-settings" class="suno-settings" hidden></div>
           <div id="o-warnings"></div>
 
+          <div class="edit-tools">
+            <button type="button" class="sub" id="o-undo" disabled>元に戻す</button>
+            <button type="button" class="sub" id="o-redo" disabled>やり直す</button>
+            <span class="hint" id="o-saved">書き換えは自動で保存されます</span>
+          </div>
           <label class="field project-field"><span>プロジェクト・アルバム名(整理用・任意)</span>
             <input id="o-project" list="project-list" placeholder="例:1stアルバム「改札」" /></label>
           <datalist id="project-list"></datalist>
@@ -533,6 +538,9 @@
           <label class="field"><span>Gemini API キー</span><input id="s-gemini-key" type="password" autocomplete="off" placeholder="AIza..." /></label>
           <label class="field"><span>Gemini モデル</span><input id="s-gemini-model" /></label>
         </div>
+        <div class="usage-box"><b>AI の使用量</b><p id="usage-totals" class="hint"></p>
+          <p class="hint">Claude の料金は Anthropic 公式の単価(Opus 5.5:100万トークンあたり入力 $4・出力 $20)から計算した目安です。正確な請求額は各社の管理画面で確認してください。</p>
+          <button class="sub" id="usage-reset">累計をリセット</button></div>
         <label class="check"><input type="checkbox" id="s-auto-review" /> 1曲できたら、自動で1回推敲する(Claude。時間と料金は約2倍)</label>
         <div class="actions">
           <button class="primary" id="s-save">保存</button>

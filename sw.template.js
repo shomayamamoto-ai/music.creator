@@ -2,11 +2,12 @@
 // 版は公開時に scripts/build-site.mjs が書き換えます。
 const VERSION = '__VERSION__';
 const CACHE = `mc-${VERSION}`;
-const SHELL = ['./', './index.html', './style.css', './dist/app.js', './textbook.html', './manifest.webmanifest',
+const SHELL = ['./', './index.html', './style.css', './dist/app.js', './dist/claude.js', './dist/gemini.js', './textbook.html', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png', './icons/favicon-32.png'];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)));
+  // ブラウザのキャッシュを通さず最新を取り、新旧のファイルが混ざらないようにする
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL.map((u) => new Request(u, { cache: 'reload' })))));
 });
 
 self.addEventListener('activate', (e) => {

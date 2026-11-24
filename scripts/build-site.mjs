@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 
 const root = new URL('../', import.meta.url);
 const out = new URL('../public/', import.meta.url);
-const files = ['index.html', 'style.css', 'textbook.html', 'dist/app.js', 'manifest.webmanifest',
+const files = ['index.html', 'style.css', 'textbook.html', 'dist/app.js', 'dist/claude.js', 'dist/gemini.js', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png', 'icons/favicon-32.png'];
 
 rmSync(out, { recursive: true, force: true });

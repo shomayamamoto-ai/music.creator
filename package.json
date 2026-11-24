@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "description": "伝えたいメッセージから Suno 用の楽曲を作る制作システム",
   "scripts": {
-    "build": "esbuild src/main.js --bundle --format=iife --platform=browser --target=es2020 --minify --outfile=dist/app.js && node scripts/build-textbook.mjs",
-    "dev": "esbuild src/main.js --bundle --format=iife --platform=browser --target=es2020 --outfile=dist/app.js --watch"
+    "build": "esbuild app=src/main.js claude=src/vendor-claude.js gemini=src/vendor-gemini.js --bundle --format=iife --platform=browser --target=es2020 --minify --outdir=dist && node scripts/build-textbook.mjs",
+    "dev": "esbuild app=src/main.js claude=src/vendor-claude.js gemini=src/vendor-gemini.js --bundle --format=iife --platform=browser --target=es2020 --outdir=dist --watch"
   },
   "repository": {
     "type": "git",

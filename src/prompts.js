@@ -438,8 +438,8 @@ ${song.lyrics}
 セクション:${lineInfo.section}
 行:${lineInfo.text}
 音数(目安):約${lineInfo.mora}音/語尾の母音:${lineInfo.vowel || '不明'}
-前の行:${lineInfo.prev || '(なし)'}
-次の行:${lineInfo.next || '(なし)'}
+前の行:${lineInfo.prev || '(なし)'}(語尾の母音:${lineInfo.prevVowel || '不明'})
+次の行:${lineInfo.next || '(なし)'}(語尾の母音:${lineInfo.nextVowel || '不明'})
 
 # 作り手の希望
 ${wish || '(特になし。より刺さる行にしてほしい)'}
