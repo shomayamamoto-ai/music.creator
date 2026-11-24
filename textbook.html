@@ -462,6 +462,18 @@ footer { border-top: 1px solid var(--gold) !important; }
           </table>
         </div>
         <p>同じ設定でも、Suno は生成のたびに結果が変わります。2〜4回生成して、良いものを選ぶのが前提です。<span class="src practice">実務知識</span></p>
+        <h3>Style を3案出して聴き比べる</h3>
+        <p>Style 欄の下の「Style を3案出して聴き比べる」を押すと、<b>王道/少し冒険/引き算</b>の3案ができます。
+          それぞれ Suno で生成して聴き比べ、良かった案を「採用」すると新しい版として保存されます。</p>
+        <h3>1行だけ直す(歌詞の分析ビュー)</h3>
+        <p>歌詞欄の下の「歌詞の分析ビュー」を開くと、行ごとの<b>音数</b>と<b>語尾の母音</b>(韻)が表示されます。
+          サビがAメロより言葉が多すぎないか、隣の行と語尾が揃っているかを一目で確認できます。
+          気になる行を押すと、AI が音数をほぼ変えずに<b>その1行だけ</b>書き直し案を3つ出します。</p>
+        <p class="where">漢字は読みが分からないため、漢字や英語を含む行の音数は概算(「約」と表示)です。</p>
+        <h3>★で評価して、好みを学習させる</h3>
+        <p>Suno で聴いたら、STEP 4 で曲に★1〜5と感想メモを付けます。3曲以上たまったら、
+          STEP 1 の「評価から好みを学習」を押すと、高評価と低評価の曲の違いから好みを抽出し、次の作詞と Style に反映します。
+          高評価だけでなく、<b>低評価の曲にも★を付ける</b>と精度が上がります。</p>
       </div>
     </div>
 
@@ -620,8 +632,9 @@ piano, clean electric guitar, live drums, 82 BPM, wide stereo, warm mix</pre>
       <li><label><input type="checkbox" id="ck10"><span>Style にアーティスト名・曲名が入っていない</span></label></li>
       <li><label><input type="checkbox" id="ck11"><span>サビを省略せず、毎回すべて書いている</span></label></li>
       <li><label><input type="checkbox" id="ck12"><span>誤字脱字・表記ゆれ・読み間違いやすい漢字がない</span></label></li>
+      <li><label><input type="checkbox" id="ck13"><span>生成した曲に★と感想メモを付けた(好みの学習に使う)</span></label></li>
     </ul>
-    <div class="check-tools"><span id="check-count">0 / 12</span><button type="button" id="check-reset">チェックをすべて外す</button></div>
+    <div class="check-tools"><span id="check-count">0 / 13</span><button type="button" id="check-reset">チェックをすべて外す</button></div>
   </section>
 
   <!-- 9 -->
