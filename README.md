@@ -9,6 +9,10 @@
 | 3 歌詞を補強 | Gemini | 書いた歌詞を磨き、Suno 用 Style を作成 |
 | 4 Suno に貼る | — | 4欄コピー、文字数・書式・視点ブレ・決まり文句などの機械チェック、版の管理 |
 | 5 聴いて直す | Gemini | Suno で生成した曲(音声も可)から原因を特定し、修正版を作成 |
+| 6 公開の準備 | Claude | 紹介文・SNS 投稿文・ハッシュタグ・切り抜き箇所・ジャケット画像プロンプト |
+
+ほかに、★評価からの好みの学習、歌詞の分析ビュー(行ごとの音数・語尾の母音・1行の書き直し)、
+Style 3案の聴き比べ、プロジェクト別の整理・版の比較・バックアップがあります。
 
 音楽心理学の知見(検証した32項目)を、毎回 AI への指示に組み込んでいます。
 
@@ -37,6 +41,16 @@
 
 指示文の本体は `src/prompts.js`、知識は `src/knowledge.js` です。
 出典の一覧は [docs/music-psychology.md](docs/music-psychology.md) にあります。
+
+## ネットに公開する(スマホから使う)
+
+GitHub Pages の場合(初回だけ設定が必要):
+
+1. GitHub のリポジトリ画面 → Settings → Pages を開く。
+2. 「Build and deployment」の Source を「GitHub Actions」にする。
+3. 以後は push するたびに `.github/workflows/pages.yml` が自動で公開します。
+
+Vercel の場合は `vercel.json` の設定で、そのまま公開できます。
 
 ## 開発者向け
 

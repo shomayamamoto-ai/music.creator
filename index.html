@@ -34,6 +34,7 @@
         <button role="tab" data-tab="enhance"><b class="no">3</b><span>歌詞を補強<small>Gemini</small></span></button>
         <button role="tab" data-tab="output"><b class="no">4</b><span>Suno に貼る<small id="nb-output"></small></span></button>
         <button role="tab" data-tab="feedback"><b class="no">5</b><span>聴いて直す<small>Gemini</small></span></button>
+        <button role="tab" data-tab="release"><b class="no">6</b><span>公開の準備<small>Claude</small></span></button>
         <span class="tab-sep" aria-hidden="true"></span>
         <button role="tab" data-tab="history" class="sub-tab"><span>履歴<small id="nb-history"></small></span></button>
         <button role="tab" data-tab="knowledge" class="sub-tab"><span>ナレッジ</span></button>
@@ -303,6 +304,9 @@
           <div id="o-pov" class="pov"></div>
           <div id="o-warnings"></div>
 
+          <label class="field project-field"><span>プロジェクト・アルバム名(整理用・任意)</span>
+            <input id="o-project" list="project-list" placeholder="例:1stアルバム「改札」" /></label>
+          <datalist id="project-list"></datalist>
           <div class="copy-field">
             <div class="copy-head"><span>Title</span><button data-copy="o-title">コピー</button></div>
             <input id="o-title" />
@@ -404,13 +408,60 @@
         <div id="feedback-result"></div>
       </section>
 
+      <!-- 6 公開の準備(Claude) -->
+      <section class="panel" data-panel="release" hidden>
+        <div class="panel-head">
+          <p class="step-label">STEP 6 <span class="badge claude">Claude</span><span class="optional">任意</span></p>
+          <h2>公開の準備</h2>
+          <p class="lead-s">完成した曲から、配信用の紹介文・SNS 投稿文・ハッシュタグ・ジャケット画像のプロンプトを作ります。</p>
+        </div>
+        <div id="rel-current" class="current-song"></div>
+        <div class="warn-box">商用で公開する場合は、Suno の有料プランに加入している期間に生成した曲であることを確認してください。</div>
+        <div class="grid">
+          <label class="field"><span>名義・アーティスト名</span><input id="rel-artist" placeholder="例:SHOMA" /></label>
+          <label class="field"><span>届けたい人</span><input id="rel-target" placeholder="例:就活中の大学生" /></label>
+        </div>
+        <label class="field"><span>その他の希望</span><input id="rel-note" placeholder="例:TikTok を一番伸ばしたい" /></label>
+        <div class="actions">
+          <button class="primary" data-run="release">リリース素材を作る</button>
+        </div>
+        <details class="paste">
+          <summary>APIキーなしで使う(claude.ai にコピペ)</summary>
+          <ol class="steps-mini">
+            <li><button class="sub" data-copy-prompt="release">プロンプトをコピー</button></li>
+            <li>claude.ai に貼って送信し、返ってきた JSON を下に貼る</li>
+          </ol>
+          <textarea id="rel-paste" rows="4"></textarea>
+          <button class="sub" id="rel-paste-load">読み込む</button>
+        </details>
+        <div id="rel-status" class="status" hidden></div>
+        <div id="rel-result"></div>
+      </section>
+
       <!-- 履歴 -->
       <section class="panel" data-panel="history" hidden>
         <div class="panel-head">
-          <h2>履歴</h2>
-          <p class="lead-s">作った曲は、このブラウザに最大30件まで保存されます。推敲や修正をするたびに、版(v1, v2…)が増えます。</p>
+          <h2>作品と履歴</h2>
+          <p class="lead-s">作った曲は、このブラウザに最大100件まで保存されます。推敲や修正をするたびに、版(v1, v2…)が増えます。</p>
+        </div>
+        <div class="grid">
+          <label class="field"><span>検索(タイトル・歌詞・メモ)</span><input id="h-search" type="search" placeholder="例:改札" /></label>
+          <label class="field"><span>プロジェクト</span><select id="h-project"><option value="">すべて</option></select></label>
         </div>
         <div id="history-view"></div>
+        <div id="diff-view"></div>
+
+        <div class="sub-sec">
+          <h3>バックアップ・別の端末へ移す</h3>
+          <p class="hint">曲・履歴・参考曲・学習結果・評価をファイルに書き出し、別の端末やブラウザで読み込めます。
+            データは端末ごとに別々に保存されるため、パソコンとスマホで使うときはこの方法で移してください。
+            APIキーは書き出しません。</p>
+          <div class="actions">
+            <button class="sub" id="backup-export">バックアップを書き出す</button>
+            <label class="sub file-btn">バックアップを読み込む<input type="file" id="backup-import" accept="application/json,.json" /></label>
+          </div>
+          <div id="backup-status" class="status" hidden></div>
+        </div>
       </section>
 
       <!-- ナレッジ -->

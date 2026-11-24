@@ -210,3 +210,24 @@ export const PREFERENCE_SCHEMA = obj({
   avoid_list: strArr('次の曲で避けること(5項目以内)'),
   confidence: str('評価の数が少ない場合などの、確からしさの注意'),
 });
+
+// 配信・SNS 用のリリース素材
+export const RELEASE_SCHEMA = obj({
+  catchcopy: str('曲を一言で伝えるキャッチコピー(20字前後)'),
+  description_short: str('配信サービス用の短い紹介文(100字前後)'),
+  description_long: str('YouTube 概要欄などに使う紹介文(300字前後。曲に込めた想い・聴いてほしい場面)'),
+  posts: {
+    type: 'array',
+    description: 'SNS 投稿文。X / Instagram / TikTok / YouTube Shorts の4つ',
+    items: obj({
+      platform: str('媒体名'),
+      text: str('投稿本文(媒体の文字数と文化に合わせる。ハッシュタグは含めない)'),
+      hashtags: strArr('この媒体向けのハッシュタグ(#付き。3〜8個)'),
+    }),
+  },
+  highlight: str('ショート動画に切り抜くべき箇所(セクション名と歌詞の該当行)と、その理由'),
+  jacket_prompt: str('ジャケット画像生成用のプロンプト(英語。文字なし、正方形、具体的な被写体・色・光・構図)'),
+  jacket_prompt_ja: str('上のプロンプトの日本語訳'),
+  thumbnail_text: str('サムネイルに大きく載せる短い文字(10字以内)'),
+  checklist: strArr('公開前に確認すべきこと(権利・クレジット表記など)'),
+});

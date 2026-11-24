@@ -488,6 +488,39 @@ ${r.lyrics}`,
 高評価と低評価を分ける特徴を抽出してください。`;
 }
 
+// ---------- リリース素材(Claude) ----------
+export function systemForRelease() {
+  return `あなたは、音楽レーベルのデジタルマーケティング担当であり、コピーライターです。
+完成した曲の歌詞・コンセプトから、配信とSNSで使う素材を作ります。
+
+# ルール
+- 曲の核(コアメッセージ)と視点を外さない。歌詞を長く引用しない(1〜2行まで)。
+- 誇大表現・事実でない実績(「再生回数○万回」など)を書かない。
+- 媒体ごとに文化と長さを変える:X は短く問いかけ、Instagram は情景と余白、TikTok は最初の1行でつかむ、YouTube Shorts は検索される言葉を入れる。
+- ハッシュタグは、大きすぎる一般タグだけにせず、曲の内容に合う中くらいのタグを混ぜる。
+- ジャケット画像のプロンプトは、歌詞の中心モチーフを使い、文字を入れない指定にする。実在の人物・ブランド・作品名は入れない。
+- AI を使って制作した曲であることの表記や、Suno の利用規約(商用利用は有料プラン期間中に生成した曲のみ)を checklist に含める。`;
+}
+
+export function userForRelease(song, extra) {
+  return `# 曲
+タイトル:${song.title}
+コンセプト:${song.concept || ''}
+核:${song.core_message || ''}
+視点:${JSON.stringify(song.pov || {})}
+モチーフ:${(song.motifs || []).join('、')}
+Style:${song.style}
+歌詞:
+${song.lyrics}
+
+# 補足
+- 名義・アーティスト名:${extra.artist || '(未定)'}
+- 届けたい人:${extra.target || '(曲から判断してください)'}
+- その他:${extra.note || '(なし)'}
+
+リリース素材を作ってください。`;
+}
+
 // ---------- コピペモード用(APIキーなしで claude.ai / Gemini アプリに貼る) ----------
 export function buildPastePrompt(system, user, schema) {
   return `${system}

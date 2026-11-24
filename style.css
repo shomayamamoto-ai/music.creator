@@ -345,3 +345,29 @@ details.lyric-view[open] { padding-bottom: 12px; }
 .lv-opt:hover { border-color: var(--accent); }
 .lv-opt small { color: var(--sub); }
 .history-item .stars-s { color: var(--gold); font-size: 13px; letter-spacing: 1px; }
+
+/* ---- v4:公開の準備・作品の整理 ---- */
+.project-field { margin-top: 4px; }
+.rel-block { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin: 10px 0; background: var(--bg); }
+.rel-block h4 { margin: 0 0 6px; font-family: var(--f-serif); font-size: 15px; display: flex; gap: 8px; align-items: center; }
+.rel-block h4 button { margin-left: auto; min-height: 36px; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 0 14px; font-size: 13px; font-weight: 700; color: var(--accent); }
+.rel-block p { margin: 0; white-space: pre-wrap; }
+.rel-block .tags { color: var(--gemini); font-size: 13.5px; margin-top: 6px; }
+.song-group { border: 1px solid var(--line); border-radius: 8px; margin: 10px 0; background: var(--bg); overflow: hidden; }
+.song-group > summary { cursor: pointer; list-style: none; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; padding: 10px 14px; min-height: 52px; }
+.song-group > summary::-webkit-details-marker { display: none; }
+.song-group > summary b { font-family: var(--f-serif); font-size: 16px; }
+.song-group > summary small { color: var(--sub); }
+.project-chip { font-size: 11.5px; font-weight: 700; color: var(--accent); background: var(--accent-soft); border-radius: 999px; padding: 0 9px; }
+.song-group .history-item { padding: 8px 14px; border-top: 1px solid var(--line); border-bottom: 0; }
+.history-item .h-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.history-item .h-actions .sub { min-height: 36px; padding: 0 12px; font-size: 12.5px; }
+.diff { font-family: var(--f-en); font-size: 13px; line-height: 1.8; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--surface); white-space: pre-wrap; overflow-x: auto; }
+.diff .add { background: var(--ok-soft); color: var(--ok); display: block; }
+.diff .del { background: var(--accent-soft); color: var(--accent); text-decoration: line-through; display: block; }
+.diff .same { color: var(--sub); display: block; }
+.file-btn { display: inline-flex; align-items: center; cursor: pointer; position: relative; }
+.file-btn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; min-height: 0; }
+label.sub.file-btn { min-height: 44px; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 0 16px; font-size: 13.5px; font-weight: 700; }
+label.sub.file-btn:hover { border-color: var(--sub); }
+label.sub.file-btn:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
