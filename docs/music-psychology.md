@@ -173,7 +173,7 @@
   - 確度:一部は二次情報
 
 - **日本語の歌は「1音符に1モーラ(拍)」が標準とされてきたが、実際には「1音符に1音節(複数モーラ)」の当て方も広く見られる。**
-  - 使い方:「きょう」「せん」などを1音にまとめ、言葉にリズムと勢いを出す(しょーまさんの「1音符に複数音」ルールとも一致)。
+  - 使い方:「きょう」「せん」などを1音にまとめる当て方も自然な選択肢の1つ。ただし必須ではなく、曲調や参考歌詞の密度に合わせて使い分ける。
   - 出典:[Starr & Shih (2017). The syllable as a prosodic unit in Japanese lexical strata: Evidence from text-setting. Glossa.](https://doaj.org/article/ce5f24694b3f4a97bc2e3b6cfabd8f75)
   - 確度:一次情報で確認
 

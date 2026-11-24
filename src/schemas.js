@@ -106,3 +106,68 @@ export const ANALYSIS_SCHEMA = obj({
   exclude_styles: str('避けるべき要素の Exclude Styles タグ'),
   caution: str('推定の限界・著作権上の注意'),
 });
+
+// 推敲ループ:厳しく採点し、弱い所だけを書き直した結果
+export const REVIEW_SCHEMA = obj({
+  critique: {
+    type: 'array',
+    description: '採点表。基準ごとに厳しく採点する',
+    items: obj({
+      criterion: str('採点基準の名前'),
+      score: { type: 'integer', description: '1〜10。8以上は「プロとしてそのまま出せる」水準のときだけ' },
+      issue: str('問題点(具体的な行を引用)。問題がなければ「なし」'),
+      fix: str('どう直したか。直していなければ「変更なし」'),
+    }),
+  },
+  verdict: str('総評。改稿前と比べて何が良くなったか'),
+  ...SONG_SCHEMA.properties,
+});
+REVIEW_SCHEMA.required = Object.keys(REVIEW_SCHEMA.properties);
+
+// 参考曲ライブラリから「ジャンルの定番」を抽出した結果
+export const PROFILE_SCHEMA = obj({
+  summary: str('参考曲群をひとことで言うと'),
+  common_traits: strArr('すべて(または大半)の参考曲に共通する要素。これがジャンルの「定番」'),
+  distinctive_choices: strArr('各曲だけが持つ個性的な選択(曲名を付けて)'),
+  tempo_range: str('テンポの範囲'),
+  structure_template: str('共通する構成の型(例:Intro短→Verse→Pre→Chorus→…)'),
+  hook_patterns: strArr('共通するフックの作り方'),
+  vocal_direction: str('ボーカルの方向性'),
+  blended_style: str('定番を押さえつつ個性を1点だけ足した Suno Style(英語・カンマ区切り・アーティスト名禁止・1000文字以内)'),
+  exclude_styles: str('避ける要素の Exclude Styles'),
+  caution: str('推定の限界・注意'),
+});
+
+// Suno で生成した後の改善サイクル
+export const FEEDBACK_SCHEMA = obj({
+  heard: str('音声がある場合:実際に聴き取れたこと(冒頭5秒・最初のサビ・全体)。音声がない場合は「音声なし」'),
+  diagnosis: {
+    type: 'array',
+    items: obj({
+      symptom: str('症状'),
+      cause: str('考えられる原因(Style・タグ・歌詞のどこか)'),
+      fix: str('具体的な直し方'),
+    }),
+  },
+  title: str('タイトル(変更不要ならそのまま)'),
+  style: str('直した Style(英語・カンマ区切り・1000文字以内)'),
+  exclude_styles: str('直した Exclude Styles'),
+  lyrics: str('直した歌詞(Suno のタグ付き。歌詞以外の問題なら元のまま)'),
+  try_next: strArr('次の生成で試すこと(優先順)'),
+  keep: strArr('今回うまくいっていて、変えてはいけない点'),
+});
+
+// 取り込んだ歌詞から学習した「書き方の傾向」
+export const LYRIC_STYLE_SCHEMA = obj({
+  summary: str('書き方の傾向をひとことで'),
+  line_length: str('1行の長さの傾向(セクション別。例:Aメロ12〜16字、サビ8〜12字)'),
+  packing: str('1音符に複数の音を詰める書き方の多さと使い所(多い/少ない/使い分け)。少ないなら「無理に詰めない」'),
+  layering: str('ハモリ・コーラス・合いの手( )の使い方の傾向'),
+  repetition: str('繰り返し(フックの反復、同じ語の反復)の傾向'),
+  rhyme: str('韻・語尾の母音・リズムの揃え方'),
+  vocabulary: str('語彙の傾向(漢語/和語/カタカナ/英語の比率、口語か文語か)'),
+  pov: str('人称・視点・時制の置き方の傾向'),
+  imagery: str('描写の傾向(具体物の多さ、比喩の種類)'),
+  do_list: strArr('新しい歌詞で守るべき書き方(5〜8項目)'),
+  dont_list: strArr('避けるべき書き方(3〜6項目)'),
+});

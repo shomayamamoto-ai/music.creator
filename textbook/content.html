@@ -3,51 +3,55 @@
 <meta name="description" content="Music Creator を使って、メッセージから Suno 用の楽曲を作る手順と、その根拠をまとめた教科書">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&family=Noto+Sans+JP:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Zen+Kaku+Gothic+New:wght@500;700;900&family=Zen+Old+Mincho:wght@700;900&display=swap">
 <style>
 /* Layout: 1カラムの読み物。左に章番号の「小節線」を置き、手順は番号つきの段で積む */
 :root {
-  --bg: #f5f6f8;
-  --paper: #ffffff;
-  --ink: #1c2230;
-  --muted: #5d6474;
-  --line: #dde1e8;
-  --accent: #c2410c;
-  --accent-soft: #fbeee6;
+  --bg: #fdf4f0;
+  --paper: #fffbf9;
+  --ink: #3b2a27;
+  --muted: #7d655f;
+  --line: #efdcd5;
+  --gold: #c9a45c;
+  --accent: #b4473b;
+  --accent-soft: #fbe7e1;
   --claude: #b4532a;
-  --gemini: #2457d6;
-  --good: #1d7a45;
-  --good-soft: #e5f4ea;
-  --bad: #b42318;
-  --bad-soft: #fbeaea;
-  --tag: #eef0f4;
-  --font-display: 'Zen Kaku Gothic New', 'Hiragino Sans', 'Noto Sans JP', sans-serif;
-  --font-body: 'Noto Sans JP', 'Hiragino Sans', 'Yu Gothic UI', system-ui, sans-serif;
-  --font-mono: ui-monospace, 'SFMono-Regular', Menlo, 'Noto Sans Mono CJK JP', monospace;
+  --gemini: #2f5fb3;
+  --good: #1f7a4d;
+  --good-soft: #dff3e6;
+  --bad: #b4473b;
+  --bad-soft: #fbe7e1;
+  --tag: #f8ebe5;
+  --font-display: 'Zen Old Mincho', 'Hiragino Mincho ProN', 'Yu Mincho', 'Noto Serif JP', serif;
+  --font-body: 'Zen Kaku Gothic New', 'Hiragino Sans', 'Yu Gothic', 'Noto Sans JP', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #12151c; --paper: #1a1e27; --ink: #eceef3; --muted: #a3a9b6; --line: #2e3440;
-    --accent: #fb8a4c; --accent-soft: #3a2418; --claude: #e8956b; --gemini: #86a8ff;
-    --good: #5ad08b; --good-soft: #17301f; --bad: #ff8a80; --bad-soft: #3a1c1c; --tag: #252a35;
+    --bg: #1c1416; --paper: #261b1e; --ink: #f3e7e2; --muted: #bfa59e; --line: #3d2b2f; --gold: #d9b872;
+    --accent: #f08f80; --accent-soft: #40262a; --claude: #e8956b; --gemini: #8fb0ff;
+    --good: #7fd6a4; --good-soft: #1d3a29; --bad: #f08f80; --bad-soft: #40262a; --tag: #2f2226;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #12151c; --paper: #1a1e27; --ink: #eceef3; --muted: #a3a9b6; --line: #2e3440;
-  --accent: #fb8a4c; --accent-soft: #3a2418; --claude: #e8956b; --gemini: #86a8ff;
-  --good: #5ad08b; --good-soft: #17301f; --bad: #ff8a80; --bad-soft: #3a1c1c; --tag: #252a35;
+  --bg: #1c1416; --paper: #261b1e; --ink: #f3e7e2; --muted: #bfa59e; --line: #3d2b2f; --gold: #d9b872;
+  --accent: #f08f80; --accent-soft: #40262a; --claude: #e8956b; --gemini: #8fb0ff;
+  --good: #7fd6a4; --good-soft: #1d3a29; --bad: #f08f80; --bad-soft: #40262a; --tag: #2f2226;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
 body {
-  margin: 0; background: var(--bg); color: var(--ink);
+  margin: 0; background: var(--bg); color: var(--ink); font-weight: 500;
   font-family: var(--font-body); font-size: 16px; line-height: 1.9;
   word-break: auto-phrase; line-break: strict; overflow-wrap: anywhere;
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
 }
 .page { max-width: 760px; margin: 0 auto; padding-block: 40px 96px; }
+header { padding-bottom: 6px; }
+h1 { letter-spacing: .04em; }
+.eyebrow { font-family: var(--font-display); letter-spacing: .22em; }
 a { color: var(--accent); }
 a:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 1.4; }
@@ -64,8 +68,10 @@ p { margin: 0 0 14px; }
 .toc li { break-inside: avoid; font-size: 15px; }
 
 /* 章:左の太い小節線で区切る */
-.chapter { margin-top: 56px; padding-left: 18px; border-left: 4px solid var(--ink); }
-.chapter > .num { font-family: var(--font-display); font-weight: 900; color: var(--accent); font-size: 14px; letter-spacing: 0.1em; margin: 0 0 2px; }
+.chapter { margin-top: 56px; }
+.chapter h2 { letter-spacing: .05em; padding-bottom: 10px; border-bottom: 1px solid var(--line); position: relative; }
+.chapter h2::after { content: ''; position: absolute; left: 0; bottom: -1px; width: 72px; height: 2px; background: var(--gold); }
+.chapter > .num { font-family: var(--font-mono); font-weight: 600; color: var(--accent); font-size: 12px; letter-spacing: 0.1em; margin: 0 0 2px; }
 
 /* 根拠の種類ラベル(事実/推測の区別) */
 .src { display: inline-block; font-size: 11.5px; font-weight: 700; padding: 0 8px; border-radius: 999px; margin-right: 6px; vertical-align: 2px; white-space: nowrap; border: 1px solid var(--line); background: var(--tag); color: var(--muted); }
@@ -141,11 +147,17 @@ pre.block { background: var(--paper); border: 1px solid var(--line); border-radi
 .faq dt { font-weight: 700; margin-top: 14px; }
 .faq dd { margin: 4px 0 0; color: var(--ink); }
 footer { margin-top: 64px; font-size: 13px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 16px; }
+footer { border-top: 1px solid var(--gold) !important; }
+.toc { border-left: 3px solid var(--gold); }
+.flow div { border-radius: 6px; }
+.rule, .kb li, .checklist label { border-radius: 6px; }
+.checklist label { min-height: 44px; }
+.check-tools button { min-height: 40px; border-radius: 999px; }
 @media (max-width: 520px) {
+  .chapter { padding-left: 0; }
   .step { grid-template-columns: 1fr; }
   .step-no { text-align: left; display: flex; gap: 8px; align-items: baseline; }
   .step-no span { display: inline; font-size: 24px; }
-  .chapter { padding-left: 12px; }
 }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
 </style>
@@ -169,7 +181,7 @@ footer { margin-top: 64px; font-size: 13px; color: var(--muted); border-top: 1px
         <li><a href="#overview">このシステムでできること</a></li>
         <li><a href="#before">はじめる前に</a></li>
         <li><a href="#principles">上手い楽曲の6原則</a></li>
-        <li><a href="#steps">制作の手順(7ステップ)</a></li>
+        <li><a href="#steps">制作の手順(8ステップ)</a></li>
         <li><a href="#suno">Suno の書き方ルール</a></li>
         <li><a href="#psychology">音楽心理学の要点</a></li>
         <li><a href="#mistakes">よくある失敗と直し方</a></li>
@@ -191,12 +203,15 @@ footer { margin-top: 64px; font-size: 13px; color: var(--muted); border-top: 1px
       <li><b>Suno</b>:最終的に音を鳴らす係。</li>
     </ul>
     <div class="flow" aria-label="制作の流れ">
-      <div><span class="who gemini">Gemini</span><b>参考曲を分析</b>好きな曲の要素を分解</div>
+      <div><span class="who gemini">Gemini</span><b>参考曲・歌詞を学習</b>定番と書き方の傾向をつかむ</div>
       <div><span class="who claude">Claude</span><b>Aメロ+サビを量産</b>10案以上を一気に</div>
-      <div><span class="who claude">Claude</span><b>1案を選びフル尺に</b>構成を組み立てる</div>
+      <div><span class="who claude">Claude</span><b>フル尺→推敲</b>厳しく採点して弱い所を直す</div>
       <div><span class="who gemini">Gemini</span><b>補強と Style 作成</b>磨いて音を決める</div>
-      <div><span class="who suno">Suno</span><b>貼って生成</b>聴いて直す</div>
+      <div><span class="who suno">Suno</span><b>貼って生成</b>2〜4回生成して選ぶ</div>
+      <div><span class="who gemini">Gemini</span><b>聴いて直す</b>原因を特定して次の版へ</div>
     </div>
+    <p>急いでいるときは、STEP 2 の<b>「全自動で作る」</b>を押すと、量産から補強までを一気に行います。
+      時間をかけられるときは、この教科書の手順どおりに1つずつ進めるほうが、自分の意図を反映しやすくなります。</p>
     <p>APIキーがなくても使えます。
       各画面の「キーなし」ボタンで指示文をコピーし、claude.ai や Gemini アプリに貼って、
       返ってきた答えをアプリに戻すだけです。</p>
@@ -236,9 +251,15 @@ footer { margin-top: 64px; font-size: 13px; color: var(--muted); border-top: 1px
         <p><span class="src research">研究</span>同じ曲でも区間ごとに「思い出せる強さ」は大きく違い、多くはサビが最強です(Burgoyne ほか 2013)。最強の区間の質が、曲の印象を決めます。</p>
       </div>
       <div class="rule">
-        <h3>2. 1つの音符に複数の音を入れる</h3>
-        <p><span class="src rule">制作ルール</span>日本語を「1音符=1文字」で並べず、「きょう」「きみ」などを1音にまとめる所を作ります。言葉にリズムと勢いが出ます。</p>
-        <p><span class="src research">研究</span>日本語の歌は「1音符に1モーラ(拍)」が標準とされてきましたが、実際には1音符に複数モーラを乗せる当て方も広く見られます(Starr &amp; Shih 2017)。</p>
+        <h3>2. 1つの音符に複数の音を入れる(合うときだけ)</h3>
+        <p><span class="src rule">制作ルール</span>使える技法の1つで、<b>毎回必ず入れるものではありません</b>。
+          曲調や、学習させた歌詞・参考曲の言葉の密度に合うときだけ使います。意味は2つあります。</p>
+        <ul>
+          <li><b>言葉の詰め</b>:「きょう」「きみ」などを1つの音符にまとめ、リズムと勢いを出す。使うなら、1音を伸ばす「間」と対比させる。</li>
+          <li><b>音の重ね</b>:ハモリやコーラスを重ねて厚みを出す。使うならサビなど要所だけに絞る。</li>
+        </ul>
+        <p>バラードのように、1音1文字で丁寧に歌うほうが合う曲では、使わないのが正解です。</p>
+        <p><span class="src research">研究</span>日本語の歌は「1音符に1モーラ(拍)」が標準とされてきましたが、実際には1音符に複数モーラを乗せる当て方も広く見られます(Starr &amp; Shih 2017)。つまり、どちらも自然な選択肢です。</p>
       </div>
       <div class="rule">
         <h3>3. 音楽はなるべく引き算</h3>
@@ -265,14 +286,14 @@ footer { margin-top: 64px; font-size: 13px; color: var(--muted); border-top: 1px
   <!-- 4 -->
   <section class="chapter" id="steps">
     <p class="num">CHAPTER 4</p>
-    <h2>制作の手順(7ステップ)</h2>
+    <h2>制作の手順(8ステップ)</h2>
     <p>この順番どおりに進めれば、迷わず1曲が完成します。</p>
 
     <div class="step" id="step1">
       <div class="step-no">STEP<span>1</span></div>
       <div class="step-body">
         <h3>メッセージを一言にする</h3>
-        <p class="where">アプリ:① メッセージから作る →「伝えたいメッセージ」欄</p>
+        <p class="where">アプリ:STEP 2 メッセージから作る →「伝えたいメッセージ」欄</p>
         <p>伝えたいことを書いたら、「なぜそれを伝えたいの?」と3回自分に聞きます。<br>
           3回目の答えが、サビの核(コアメッセージ)になります。</p>
         <pre class="block">伝えたいこと:就活がつらい人を励ましたい
@@ -288,7 +309,7 @@ footer { margin-top: 64px; font-size: 13px; color: var(--muted); border-top: 1px
       <div class="step-no">STEP<span>2</span></div>
       <div class="step-body">
         <h3>視点シートを決める</h3>
-        <p class="where">アプリ:①「語り手」「時点」欄(空欄なら AI が1つに決めます)</p>
+        <p class="where">アプリ:STEP 2 「語り手」「時点」欄(空欄なら AI が1つに決めます)</p>
         <p>歌詞の一行一行は、「誰が、誰に、いつ、どこで言っている言葉か」が説明できる必要があります。
           ここが決まっていないと、AI は行ごとに視点を変えてしまいます。</p>
         <div class="scroll">
@@ -322,7 +343,7 @@ footer { margin-top: 64px; font-size: 13px; color: var(--muted); border-top: 1px
       <div class="step-no">STEP<span>3</span></div>
       <div class="step-body">
         <h3>中心モチーフを1〜2個に絞る</h3>
-        <p class="where">アプリ:AI が自動で選び、④の画面に「モチーフ」として表示</p>
+        <p class="where">アプリ:AI が自動で選び、STEP 4 の画面に「モチーフ」として表示</p>
         <p>テーマを象徴する具体物(モチーフ)は、1〜2個だけ選びます。
           同じモチーフを場面ごとに意味を変えて登場させると、聴き手の中で育っていきます。</p>
         <div class="compare">
@@ -343,17 +364,32 @@ footer { margin-top: 64px; font-size: 13px; color: var(--muted); border-top: 1px
     <div class="step" id="step4">
       <div class="step-no">STEP<span>4</span></div>
       <div class="step-body">
-        <h3>参考曲の要素を分析する</h3>
-        <p class="where">アプリ:③ サンプル分析(Gemini)</p>
+        <h3>参考曲と歌詞を学習させる</h3>
+        <p class="where">アプリ:STEP 1 参考曲・歌詞の学習(Gemini)</p>
         <p>音声ファイル、YouTube の URL(公開動画のみ)、曲名のどれかを入れて分析します。
           ジャンル、テンポ、キー、楽器、ボーカルの質感、構成、フックの仕掛けなどに分解され、
           Suno 用の Style にも変換されます。</p>
         <ul>
           <li>「ブラウザ内でテンポ・キーだけ推定」は、音声を外部に送らずに計算します。
             倍テン・半テン(例:120 と 60)や、平行調(例:C major と A minor)の取り違えは起こり得ます。</li>
-          <li>分析結果は、①②の「参考にする」にチェックを入れると曲作りに反映されます。</li>
+          <li>分析結果は、STEP 2・3 の「参考にする」にチェックを入れると曲作りに反映されます。</li>
           <li>使うのは「要素」だけです。歌詞やメロディをそのまま真似ると、権利上の問題になり得ます。</li>
+          <li>分析結果には、Gemini の推定とブラウザ内の推定が<b>一致したかどうか</b>が表示されます。食い違ったら、自分の耳で確かめてください。</li>
         </ul>
+        <h3>参考曲ライブラリで「ジャンルの定番」をつかむ</h3>
+        <p>分析した曲は「参考曲ライブラリ」に貯まります。2〜5曲を選んで「共通点を抽出」すると、
+          全曲に共通する<b>定番</b>と、各曲だけの<b>個性</b>を分けて、新曲の土台になる Style を作ります。
+          「ジャンルの代表曲を聴いておく」(原則4)を、アプリの中で行う機能です。</p>
+        <h3>歌詞を学習させて、精度を上げる</h3>
+        <p>自分の過去の歌詞や、手本にしたい歌詞を貼り付けて取り込み、「選んだ歌詞から書き方を学習」を押します。</p>
+        <ol>
+          <li>まずブラウザの中で、1行の長さ・繰り返しの割合・人称・文字の種類・語尾の母音・1音符にまとめやすい文字の割合を数えます。</li>
+          <li>その数字を根拠に、Gemini が「書き方の傾向」(詰め方、ハモリの使い方、韻、語彙、視点の置き方など)をまとめます。</li>
+          <li>以後の作詞・補強・推敲では、AI がこの傾向に合わせて書きます。</li>
+        </ol>
+        <p>「1音符に複数音」を入れるかどうかも、この学習結果で判断します。詰めた書き方が少ない歌詞を学習させれば、AI は無理に詰めません。</p>
+        <p class="where">補足:これは AI そのものを再学習させるのではなく、学習結果を毎回の指示に添える仕組みです。
+          歌詞の文言はそのまま使わないよう指示しています。手本にする歌詞が多いほど、傾向は安定します(目安は3曲以上)。</p>
       </div>
     </div>
 
@@ -361,7 +397,7 @@ footer { margin-top: 64px; font-size: 13px; color: var(--muted); border-top: 1px
       <div class="step-no">STEP<span>5</span></div>
       <div class="step-body">
         <h3>Aメロ+サビを量産して選ぶ</h3>
-        <p class="where">アプリ:① →「Aメロ+サビを量産」(Claude)</p>
+        <p class="where">アプリ:STEP 2 →「量産する」(Claude)</p>
         <p>10案以上を一気に作ります。案ごとに切り口(手紙型、独白型、情景描写型、逆説型など)が変わるよう指示してあります。
           スコア順に並ぶので、上から読んで選びます。</p>
         <h3>選ぶときの基準</h3>
@@ -380,16 +416,19 @@ footer { margin-top: 64px; font-size: 13px; color: var(--muted); border-top: 1px
       <div class="step-no">STEP<span>6</span></div>
       <div class="step-body">
         <h3>フル尺に仕上げて、Gemini で補強する</h3>
-        <p class="where">アプリ:案の「この案をフル尺に仕上げる」(Claude)→ ④の「② Gemini で補強する」</p>
+        <p class="where">アプリ:案の「この案をフル尺に仕上げる」(Claude)→ STEP 4 の「Gemini で補強する」</p>
         <p>選んだ案の Aメロとサビを核にして、Claude が Bメロ、2番、Bridge、ラストサビまで組み立てます。</p>
+        <p>仕上がったら、Claude が<b>レコード会社の制作責任者の目線で10項目を採点</b>し、8点未満の所だけを書き直します(推敲)。
+          採点表はSTEP 4 の画面に表示されます。「設定」で自動推敲をオフにすることもできます。</p>
+        <p>機械チェックも同時に行います。一人称・二人称の混在、タイトルがサビにない、決まり文句の多さ、長すぎる行、長いイントロを数えて警告し、推敲の材料にします。</p>
         <p>次に Gemini で補強します。補強では、次のことを行います。</p>
         <ul>
           <li>作者のメッセージと言葉の癖を残したまま、弱い行だけを磨く。</li>
           <li>視点のブレと、テーマ用語の詰め込みを直す。</li>
           <li>曲の感情の流れに合う Suno の Style を、細かく作る。</li>
         </ul>
-        <p>変更点は「元の歌詞/補強後/理由」の表で確認できます。気に入らない変更は、④の画面で直接戻してください。</p>
-        <p>自分で書いた歌詞がある場合は、STEP 5 を飛ばして、② に直接貼り付けて補強できます。</p>
+        <p>変更点は「元の歌詞/補強後/理由」の表で確認できます。気に入らない変更は、STEP 4 の画面で直接戻してください。</p>
+        <p>自分で書いた歌詞がある場合は、STEP 5 を飛ばして、STEP 3 に直接貼り付けて補強できます。</p>
       </div>
     </div>
 
@@ -397,7 +436,7 @@ footer { margin-top: 64px; font-size: 13px; color: var(--muted); border-top: 1px
       <div class="step-no">STEP<span>7</span></div>
       <div class="step-body">
         <h3>Suno に貼って生成し、聴いて直す</h3>
-        <p class="where">アプリ:④ Suno に貼る</p>
+        <p class="where">アプリ:STEP 4 Suno に貼る</p>
         <ol>
           <li>Suno で「Custom」モードを開く。</li>
           <li>Title、Style of Music、Exclude Styles、Lyrics の4つを、それぞれ「コピー」ボタンで貼る。</li>
@@ -415,6 +454,21 @@ footer { margin-top: 64px; font-size: 13px; color: var(--muted); border-top: 1px
           </table>
         </div>
         <p>同じ設定でも、Suno は生成のたびに結果が変わります。2〜4回生成して、良いものを選ぶのが前提です。<span class="src practice">実務知識</span></p>
+      </div>
+    </div>
+
+    <div class="step" id="step8">
+      <div class="step-no">STEP<span>8</span></div>
+      <div class="step-body">
+        <h3>聴いて直す(改善サイクル)</h3>
+        <p class="where">アプリ:STEP 5 聴いて直す(Gemini)</p>
+        <p>生成した曲で気になったことを選び、感想を書きます。生成した曲の音声(mp3 など)を添付すると、Gemini が実際に聴いて判断します。</p>
+        <ul>
+          <li>原因を「Style の問題」「タグと構成の問題」「歌詞の表記の問題」に切り分けて、直し方を出します。</li>
+          <li>うまくいっている点は「変えてはいけない点」として残します。</li>
+          <li>「この修正版をSTEP 4 に反映する」を押すと、新しい版(v2, v3…)として保存されます。前の版は「履歴」に残ります。</li>
+        </ul>
+        <p>1回の修正で変えるのは、原因に関係する所だけにします。何が効いたのかが分かるようにするためです。</p>
       </div>
     </div>
   </section>
@@ -526,15 +580,17 @@ piano, clean electric guitar, live drums, 82 BPM, wide stereo, warm mix</pre>
     <dl class="faq">
       <dt>語り手や時点が、途中で変わってしまう</dt>
       <dd>視点シート(STEP 2)を先に決めて、アプリの「語り手」「時点」欄に入れてください。
-        ④の画面で「人称・時制」を確認し、ズレた行は直接直すか、② の補強で「視点のブレを直して」と指示します。</dd>
+        STEP 4 の画面で「人称・時制」を確認し、ズレた行は直接直すか、STEP 3 の補強で「視点のブレを直して」と指示します。</dd>
       <dt>テーマに関係する単語ばかり並んでいる</dt>
-      <dd>中心モチーフを1つ選び、それ以外の関連語を削ります(STEP 3)。② の補強に「モチーフを○○だけに絞って」と書くのも有効です。</dd>
+      <dd>中心モチーフを1つ選び、それ以外の関連語を削ります(STEP 3)。STEP 3 の補強に「モチーフを○○だけに絞って」と書くのも有効です。</dd>
       <dt>抽象的できれいな言葉ばかりで、心に残らない</dt>
       <dd>「頑張ろう」「大切なもの」などの決まり文句を、具体的な場面・物・行動に置き換えます。</dd>
       <dt>AI の案がどれも似ている</dt>
       <dd>聴き手・語り手・時点を変えて量産し直します。条件を1つ変えるだけで、切り口は大きく変わります。</dd>
+      <dt>言葉が詰まりすぎて、聞き取れない</dt>
+      <dd>「1音符に複数音」が合わない曲です。STEP 1 で落ち着いた書き方の歌詞を学習させるか、STEP 3 の補強に「1行を短く、詰めすぎない」と書きます。</dd>
       <dt>Suno の音が想像と違う</dt>
-      <dd>Style を短くして、核になるタグだけを残します(引き算)。参考曲を ③ で分析し、その Style を土台にする方法もあります。</dd>
+      <dd>Style を短くして、核になるタグだけを残します(引き算)。参考曲を STEP 1 で分析し、その Style を土台にする方法もあります。</dd>
     </dl>
   </section>
 
@@ -550,7 +606,7 @@ piano, clean electric guitar, live drums, 82 BPM, wide stereo, warm mix</pre>
       <li><label><input type="checkbox" id="ck4"><span>語り手・相手・時点が最後までブレていない</span></label></li>
       <li><label><input type="checkbox" id="ck5"><span>一人称・二人称・時制が揃っている</span></label></li>
       <li><label><input type="checkbox" id="ck6"><span>モチーフは1〜2個で、関連語の羅列がない</span></label></li>
-      <li><label><input type="checkbox" id="ck7"><span>1音符に複数の音を乗せる「詰め」と、伸ばす「間」がある</span></label></li>
+      <li><label><input type="checkbox" id="ck7"><span>言葉の詰め方・ハモリの重ね方が曲調に合っている(無理に入れていない)</span></label></li>
       <li><label><input type="checkbox" id="ck8"><span>削っても意味が変わらない言葉を削った</span></label></li>
       <li><label><input type="checkbox" id="ck9"><span>イントロが短く、最初の5秒で何かが起きる</span></label></li>
       <li><label><input type="checkbox" id="ck10"><span>Style にアーティスト名・曲名が入っていない</span></label></li>

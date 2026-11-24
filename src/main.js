@@ -1,14 +1,25 @@
 // 画面の動きをまとめたファイル。
-import { callClaude, callGemini, extractJson } from './llm.js';
+import { callClaude, callGemini, extractJson, LlmError } from './llm.js';
 import * as P from './prompts.js';
-import { SONG_SCHEMA, ENHANCE_SCHEMA, HOOKS_SCHEMA, ANALYSIS_SCHEMA } from './schemas.js';
-import { LIMITS, lintSong, normalizeLyrics, normalizeStyle, toCopyBlock } from './suno.js';
+import {
+  SONG_SCHEMA,
+  ENHANCE_SCHEMA,
+  HOOKS_SCHEMA,
+  ANALYSIS_SCHEMA,
+  REVIEW_SCHEMA,
+  PROFILE_SCHEMA,
+  FEEDBACK_SCHEMA,
+  LYRIC_STYLE_SCHEMA,
+} from './schemas.js';
+import { LIMITS, lintSong, lintLyricsQuality, normalizeLyrics, normalizeStyle, toCopyBlock } from './suno.js';
 import { analyzeLocally, fileToBase64 } from './audio.js';
+import { aggregateStats } from './lyricstats.js';
 import { KNOWLEDGE, CONFIDENCE_LABEL, CREATOR_RULES, SUNO_RIGHTS_NOTE } from './knowledge.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) =>
   String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const uid = () => Math.random().toString(36).slice(2, 10);
 
 // ---------- 保存(このブラウザの中だけ) ----------
 const store = {
@@ -25,25 +36,31 @@ const store = {
       localStorage.setItem(`mc:${key}`, JSON.stringify(value));
     } catch (_) {}
   },
-  remove(key) {
-    try {
-      localStorage.removeItem(`mc:${key}`);
-    } catch (_) {}
-  },
 };
 
 const DEFAULTS = {
   claudeModel: 'claude-opus-5-5',
   claudeEffort: 'high',
   geminiModel: 'gemini-3.1-pro-preview',
+  autoReview: true,
 };
 const settings = () => ({ ...DEFAULTS, ...store.get('settings', {}) });
 
+const MAX_REFS = 8;
+const MAX_LYRICS = 20;
+const MAX_INLINE_MB = 15; // Gemini はリクエスト全体で20MBまで(base64で約1.33倍になるため余裕を持たせる)
+
 const state = {
   song: store.get('song', null),
-  analysis: store.get('analysis', null),
+  lastAnalysis: store.get('analysis', null),
+  refs: store.get('refs', []),
+  profile: store.get('profile', null),
+  lyricItems: store.get('lyrics', []),
+  lyricStyle: store.get('lyricStyle', null),
+  useLyricStyle: store.get('useLyricStyle', true),
   hooks: null,
   lastComposeInput: null,
+  lastFeedback: null,
 };
 
 // ---------- 共通UI ----------
@@ -80,25 +97,41 @@ function setStatus(id, msg, kind = 'busy') {
   el.textContent = msg;
 }
 
-function switchTab(name) {
+function switchTab(name, { scroll = true } = {}) {
   document.querySelectorAll('[role=tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
   document.querySelectorAll('[data-panel]').forEach((p) => (p.hidden = p.dataset.panel !== name));
   store.set('tab', name);
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  if (name === 'feedback') renderFeedbackHeader();
+  // スマホでは選んだタブが見える位置までタブ列を送る
+  document.querySelector(`[role=tab][data-tab="${name}"]`)?.scrollIntoView({ block: 'nearest', inline: 'center' });
+  if (scroll) {
+    const top = document.querySelector('.shell').getBoundingClientRect().top + window.scrollY;
+    if (window.scrollY > top) window.scrollTo({ top, behavior: 'smooth' });
+  }
 }
 
+let busy = false;
 async function withBusy(statusId, label, fn) {
+  if (busy) return;
+  busy = true;
   const buttons = document.querySelectorAll('button[data-run]');
   buttons.forEach((b) => (b.disabled = true));
   const started = Date.now();
   let chars = 0;
+  let currentLabel = label;
   const tick = setInterval(() => {
     const sec = Math.round((Date.now() - started) / 1000);
-    setStatus(statusId, `${label}(${sec}秒経過${chars ? `・${chars}文字受信` : '・考え中'})`);
+    setStatus(statusId, `${currentLabel}(${sec}秒経過${chars ? `・${chars}文字受信` : '・考え中'})`);
   }, 500);
   try {
     setStatus(statusId, `${label}…`);
-    await fn((n) => (chars = n));
+    await fn(
+      (n) => (chars = n),
+      (newLabel) => {
+        currentLabel = newLabel;
+        chars = 0;
+      },
+    );
     setStatus(statusId, '');
   } catch (err) {
     console.error(err);
@@ -106,7 +139,19 @@ async function withBusy(statusId, label, fn) {
   } finally {
     clearInterval(tick);
     buttons.forEach((b) => (b.disabled = false));
+    busy = false;
   }
+}
+
+// ---------- AI 呼び出しの共通化 ----------
+function claude(system, user, schema, onProgress) {
+  const s = settings();
+  return callClaude({ apiKey: s.claudeKey, model: s.claudeModel, effort: s.claudeEffort, system, user, schema, onProgress });
+}
+
+function gemini(system, parts, schema, onProgress) {
+  const s = settings();
+  return callGemini({ apiKey: s.geminiKey, model: s.geminiModel, system, parts, schema, onProgress });
 }
 
 // ---------- 入力の取得 ----------
@@ -138,9 +183,7 @@ function enhanceInput() {
   };
 }
 
-function referenceText() {
-  const a = state.analysis;
-  if (!a) return '';
+function analysisToText(a) {
   return [
     `ジャンル:${a.genre}(${(a.subgenres || []).join(', ')})/年代感:${a.era_feel}`,
     `テンポ:${a.bpm_estimate}/キー:${a.key_estimate}/拍子:${a.time_signature}`,
@@ -155,6 +198,25 @@ function referenceText() {
   ].join('\n');
 }
 
+// 参考にする要素:共通点プロファイルがあればそれを、なければ選択中の参考曲を使う
+function referenceText() {
+  const p = state.profile;
+  if (p) {
+    return [
+      `参考曲群の要約:${p.summary}`,
+      `共通する定番:${(p.common_traits || []).join(' / ')}`,
+      `テンポの範囲:${p.tempo_range}`,
+      `構成の型:${p.structure_template}`,
+      `フックの作り方:${(p.hook_patterns || []).join(' / ')}`,
+      `ボーカル:${p.vocal_direction}`,
+      `土台にする Style:${p.blended_style}`,
+    ].join('\n');
+  }
+  const selected = state.refs.filter((r) => r.selected);
+  const list = selected.length ? selected : state.lastAnalysis ? [state.lastAnalysis] : [];
+  return list.map((a, i) => `## 参考曲${i + 1}\n${analysisToText(a)}`).join('\n\n');
+}
+
 function requireText(value, msg, statusId) {
   if (!value) {
     setStatus(statusId, msg, 'error');
@@ -163,23 +225,53 @@ function requireText(value, msg, statusId) {
   return true;
 }
 
-// ---------- 各モードの実行 ----------
+// ---------- 学習した作詞スタイル ----------
+function styleToText(st) {
+  if (!st) return '';
+  return [
+    `要約:${st.summary}`,
+    `1行の長さ:${st.line_length}`,
+    `言葉の詰め方(1音符に複数音):${st.packing}`,
+    `ハモリ・コーラス:${st.layering}`,
+    `繰り返し:${st.repetition}`,
+    `韻・リズム:${st.rhyme}`,
+    `語彙:${st.vocabulary}`,
+    `人称・視点:${st.pov}`,
+    `描写:${st.imagery}`,
+    `守る:${(st.do_list || []).join(' / ')}`,
+    `避ける:${(st.dont_list || []).join(' / ')}`,
+  ].join('\n');
+}
+
+function applyLearnedStyle() {
+  P.setLearnedStyle(state.useLyricStyle ? styleToText(state.lyricStyle) : '');
+}
+
+// ---------- STEP 2 量産・1曲・全自動 ----------
+async function doHooks(input, onProgress) {
+  return claude(P.systemForHooks(), P.userForHooks(input), HOOKS_SCHEMA, onProgress);
+}
+
+async function doCompose(input, candidate, onProgress) {
+  return claude(
+    P.systemForCompose(),
+    candidate ? P.userForExpand(input, candidate) : P.userForCompose(input),
+    SONG_SCHEMA,
+    onProgress,
+  );
+}
+
+async function doReview(song, onProgress) {
+  const warnings = lintLyricsQuality(song);
+  return claude(P.systemForReview(), P.userForReview(song, warnings), REVIEW_SCHEMA, onProgress);
+}
+
 async function runHooks() {
   const input = composeInput();
   if (!requireText(input.message, '「伝えたいメッセージ」を入力してください。', 'c-status')) return;
   state.lastComposeInput = input;
-  const s = settings();
   await withBusy('c-status', `Claude が ${input.count} 案を作っています`, async (onProgress) => {
-    const result = await callClaude({
-      apiKey: s.claudeKey,
-      model: s.claudeModel,
-      effort: s.claudeEffort,
-      system: P.systemForHooks(),
-      user: P.userForHooks(input),
-      schema: HOOKS_SCHEMA,
-      onProgress,
-    });
-    showHooks(result);
+    showHooks(await doHooks(input, onProgress));
   });
 }
 
@@ -187,41 +279,131 @@ async function runCompose(candidate) {
   const input = candidate && state.lastComposeInput ? state.lastComposeInput : composeInput();
   if (!requireText(input.message, '「伝えたいメッセージ」を入力してください。', 'c-status')) return;
   state.lastComposeInput = input;
-  const s = settings();
-  await withBusy('c-status', 'Claude が1曲に仕上げています', async (onProgress) => {
-    const song = await callClaude({
-      apiKey: s.claudeKey,
-      model: s.claudeModel,
-      effort: s.claudeEffort,
-      system: P.systemForCompose(),
-      user: candidate ? P.userForExpand(input, candidate) : P.userForCompose(input),
-      schema: SONG_SCHEMA,
-      onProgress,
-    });
+  await withBusy('c-status', 'Claude が1曲に仕上げています', async (onProgress, relabel) => {
+    let song = await doCompose(input, candidate, onProgress);
+    if (settings().autoReview) {
+      relabel('Claude が厳しく推敲しています');
+      try {
+        song = await doReview(song, onProgress);
+      } catch (err) {
+        toast('推敲に失敗したため、推敲前の版を表示します');
+      }
+    }
     setSong(song, 'Claude');
   });
 }
 
-async function runEnhance() {
-  const input = enhanceInput();
-  if (!requireText(input.lyrics, '補強したい歌詞を貼り付けてください。', 'e-status')) return;
+const PIPELINE = [
+  ['hooks', 'Aメロ+サビを量産(Claude)'],
+  ['pick', '最高得点の案を選ぶ'],
+  ['expand', 'フル尺に仕上げる(Claude)'],
+  ['review', '厳しく推敲する(Claude)'],
+  ['enhance', '補強と Style の仕上げ(Gemini)'],
+];
+
+function setPipeline(key, cls, note) {
+  const li = document.querySelector(`#pipeline [data-step="${key}"]`);
+  if (!li) return;
+  li.className = cls;
+  if (note) li.querySelector('small').textContent = note;
+}
+
+async function runAuto() {
+  const input = composeInput();
+  if (!requireText(input.message, '「伝えたいメッセージ」を入力してください。', 'c-status')) return;
   const s = settings();
-  await withBusy('e-status', 'Gemini が歌詞を補強しています', async (onProgress) => {
-    const song = await callGemini({
-      apiKey: s.geminiKey,
-      model: s.geminiModel,
-      system: P.systemForEnhance(),
-      parts: [{ text: P.userForEnhance(input) }],
-      schema: ENHANCE_SCHEMA,
-      onProgress,
-    });
-    showChanges(song.changes);
-    setSong(song, 'Gemini');
+  if (!s.claudeKey) {
+    setStatus('c-status', '全自動には Claude の APIキーが必要です。「設定」タブで入力するか、下の「APIキーなしで使う」を開いてください。', 'error');
+    return;
+  }
+  state.lastComposeInput = input;
+  const pl = $('pipeline');
+  pl.hidden = false;
+  pl.innerHTML = PIPELINE.map(([k, label]) => `<li data-step="${k}"><span>${label}</span><small class="hint"></small></li>`).join('');
+  let stepKey = 'hooks';
+  await withBusy('c-status', '全自動で作っています:案を量産中', async (onProgress, relabel) => {
+    try {
+      setPipeline('hooks', 'run');
+      const hooks = await doHooks(input, onProgress);
+      showHooks(hooks);
+      setPipeline('hooks', 'done', `${hooks.candidates?.length ?? 0}案`);
+
+      stepKey = 'pick';
+      const best = state.hooks.sorted[0];
+      if (!best) throw new LlmError('案が1つも返ってきませんでした。もう一度お試しください。');
+      setPipeline('pick', 'done', `${best.label}(${best.score}/10)`);
+
+      stepKey = 'expand';
+      setPipeline('expand', 'run');
+      relabel('全自動で作っています:フル尺に仕上げ中');
+      let song = await doCompose(input, best, onProgress);
+      setPipeline('expand', 'done');
+
+      stepKey = 'review';
+      setPipeline('review', 'run');
+      relabel('全自動で作っています:推敲中');
+      try {
+        song = await doReview(song, onProgress);
+        const low = (song.critique || []).filter((c) => c.score < 8).length;
+        setPipeline('review', 'done', low ? `8点未満 ${low}項目を改稿` : '全項目8点以上');
+      } catch (err) {
+        setPipeline('review', 'fail', '失敗したため推敲前の版で続行');
+      }
+
+      stepKey = 'enhance';
+      if (s.geminiKey) {
+        setPipeline('enhance', 'run');
+        relabel('全自動で作っています:Gemini で補強中');
+        try {
+          const enhanced = await gemini(
+            P.systemForEnhance(),
+            [{ text: P.userForEnhance({ lyrics: song.lyrics, message: song.core_message, genre: input.genre, strength: '弱(Style 作成とタグ整理が中心。歌詞はほぼそのまま)', extra: input.extra, reference: input.reference }) }],
+            ENHANCE_SCHEMA,
+            onProgress,
+          );
+          // Claude の採点表は残し、Gemini の補強結果で上書きする
+          song = { ...song, ...enhanced };
+          showChanges(enhanced.changes);
+          setPipeline('enhance', 'done');
+        } catch (err) {
+          setPipeline('enhance', 'fail', `${err.message}(Claude の版で完成)`);
+        }
+      } else {
+        setPipeline('enhance', 'skip', 'Gemini の APIキーがないため省略');
+      }
+      setSong(song, '全自動');
+    } catch (err) {
+      setPipeline(stepKey, 'fail', err.message);
+      throw err;
+    }
   });
 }
 
-const MAX_INLINE_MB = 15; // Gemini はリクエスト全体で20MBまで(base64で約1.33倍になるため余裕を持たせる)
+// ---------- STEP 3 補強 ----------
+async function runEnhance() {
+  const input = enhanceInput();
+  if (!requireText(input.lyrics, '補強したい歌詞を貼り付けてください。', 'e-status')) return;
+  await withBusy('e-status', 'Gemini が歌詞を補強しています', async (onProgress) => {
+    const song = await gemini(P.systemForEnhance(), [{ text: P.userForEnhance(input) }], ENHANCE_SCHEMA, onProgress);
+    showChanges(song.changes);
+    setSong(song, 'Gemini', { revision: isSameSong(input.lyrics) });
+  });
+}
 
+function isSameSong(lyrics) {
+  return !!state.song && normalizeLyrics(state.song.lyrics) === normalizeLyrics(lyrics);
+}
+
+// ---------- STEP 4 推敲 ----------
+async function runReview() {
+  if (!state.song) return;
+  saveEdits();
+  await withBusy('r-status', 'Claude が厳しく推敲しています', async (onProgress) => {
+    setSong(await doReview(state.song, onProgress), 'Claude 推敲', { revision: true });
+  });
+}
+
+// ---------- STEP 1 分析・ライブラリ・学習 ----------
 async function runAnalyze() {
   const file = $('a-file').files[0];
   const youtube = $('a-youtube').value.trim();
@@ -239,7 +421,6 @@ async function runAnalyze() {
     setStatus('a-status', 'YouTube の URL の形式が正しくないようです。', 'error');
     return;
   }
-  const s = settings();
   await withBusy('a-status', 'Gemini が楽曲を分析しています', async (onProgress) => {
     let local = null;
     if (file) {
@@ -253,15 +434,8 @@ async function runAnalyze() {
     if (file) parts.push({ inlineData: { mimeType: file.type || 'audio/mpeg', data: await fileToBase64(file) } });
     if (youtube) parts.push({ fileData: { fileUri: youtube } });
     parts.push({ text: P.userForAnalysis({ title, notes, local }) });
-    const result = await callGemini({
-      apiKey: s.geminiKey,
-      model: s.geminiModel,
-      system: P.systemForAnalysis(),
-      parts,
-      schema: ANALYSIS_SCHEMA,
-      onProgress,
-    });
-    setAnalysis(result, local);
+    const result = await gemini(P.systemForAnalysis(), parts, ANALYSIS_SCHEMA, onProgress);
+    setAnalysis(result, local, title || file?.name || youtube);
   });
 }
 
@@ -286,19 +460,89 @@ async function runLocalOnly() {
   }
 }
 
+async function runProfile() {
+  const selected = state.refs.filter((r) => r.selected);
+  if (selected.length < 2) {
+    setStatus('p-status', '参考曲ライブラリから2曲以上を選んでください。', 'error');
+    return;
+  }
+  await withBusy('p-status', `Gemini が ${selected.length} 曲の共通点を抽出しています`, async (onProgress) => {
+    setProfile(await gemini(P.systemForProfile(), [{ text: P.userForProfile(selected) }], PROFILE_SCHEMA, onProgress));
+  });
+}
+
+function selectedLyrics() {
+  return state.lyricItems.filter((l) => l.selected);
+}
+
+async function runLearn() {
+  const items = selectedLyrics();
+  if (!items.length) {
+    setStatus('l-status', '学習させる歌詞を1曲以上取り込んで、チェックを入れてください。', 'error');
+    return;
+  }
+  const stats = aggregateStats(items);
+  await withBusy('l-status', `Gemini が ${items.length} 曲の書き方を学習しています`, async (onProgress) => {
+    setLyricStyle(await gemini(P.systemForLyricStyle(), [{ text: P.userForLyricStyle(items, stats) }], LYRIC_STYLE_SCHEMA, onProgress), stats);
+  });
+}
+
+// ---------- STEP 5 聴いて直す ----------
+const SYMPTOMS = [
+  'イントロが長い・始まりが遅い',
+  '声の雰囲気が違う',
+  '歌詞の読み間違いがある',
+  '言葉が詰まって聞き取れない',
+  '1音が伸びすぎ・間延びする',
+  'サビが盛り上がらない',
+  '音がごちゃごちゃしている',
+  '音が薄い・地味',
+  'テンポが想像と違う',
+  'ジャンル・雰囲気が違う',
+  '構成が崩れた(サビがない等)',
+  '終わり方が不自然',
+];
+
+function feedbackInput() {
+  return {
+    symptoms: [...document.querySelectorAll('#f-symptoms input:checked')].map((i) => i.value),
+    comment: $('f-comment').value.trim(),
+    file: $('f-file').files[0] || null,
+  };
+}
+
+async function runFeedback() {
+  if (!state.song) {
+    setStatus('f-status', 'まだ曲がありません。STEP 2 か 3 で作るか、「履歴」から開いてください。', 'error');
+    return;
+  }
+  saveEdits();
+  const input = feedbackInput();
+  if (!input.symptoms.length && !input.comment && !input.file) {
+    setStatus('f-status', '気になったことを選ぶか、感想を書くか、音声を添付してください。', 'error');
+    return;
+  }
+  if (input.file && input.file.size > MAX_INLINE_MB * 1024 * 1024) {
+    setStatus('f-status', `音声ファイルが大きすぎます(${MAX_INLINE_MB}MB まで)。`, 'error');
+    return;
+  }
+  await withBusy('f-status', input.file ? 'Gemini が生成された曲を聴いています' : 'Gemini が原因を調べています', async (onProgress) => {
+    const parts = [];
+    if (input.file) parts.push({ inlineData: { mimeType: input.file.type || 'audio/mpeg', data: await fileToBase64(input.file) } });
+    parts.push({ text: P.userForFeedback(state.song, { ...input, hasAudio: !!input.file }) });
+    showFeedback(await gemini(P.systemForFeedback(), parts, FEEDBACK_SCHEMA, onProgress));
+  });
+}
+
 // ---------- コピペモード ----------
 function pastePromptFor(kind) {
-  if (kind === 'hooks') {
+  if (kind === 'hooks' || kind === 'compose') {
     const input = composeInput();
     if (!requireText(input.message, '「伝えたいメッセージ」を入力してください。', 'c-status')) return null;
     state.lastComposeInput = input;
-    return P.buildPastePrompt(P.systemForHooks(), P.userForHooks(input), HOOKS_SCHEMA);
-  }
-  if (kind === 'compose') {
-    const input = composeInput();
-    if (!requireText(input.message, '「伝えたいメッセージ」を入力してください。', 'c-status')) return null;
-    state.lastComposeInput = input;
-    return P.buildPastePrompt(P.systemForCompose(), P.userForCompose(input), SONG_SCHEMA);
+    return kind === 'hooks'
+      ? P.buildPastePrompt(P.systemForHooks(), P.userForHooks(input), HOOKS_SCHEMA)
+      : P.buildPastePrompt(P.systemForCompose(), P.userForCompose(input), SONG_SCHEMA);
   }
   if (kind === 'enhance') {
     const input = enhanceInput();
@@ -311,6 +555,38 @@ function pastePromptFor(kind) {
       P.userForAnalysis({ title: $('a-title').value.trim(), notes: $('a-notes').value.trim() }) +
         '\n(楽曲の音声または YouTube の URL は、このメッセージと一緒に渡しています)',
       ANALYSIS_SCHEMA,
+    );
+  }
+  if (kind === 'review') {
+    if (!state.song) return null;
+    saveEdits();
+    return P.buildPastePrompt(P.systemForReview(), P.userForReview(state.song, lintLyricsQuality(state.song)), REVIEW_SCHEMA);
+  }
+  if (kind === 'profile') {
+    const selected = state.refs.filter((r) => r.selected);
+    if (selected.length < 2) {
+      setStatus('p-status', '参考曲ライブラリから2曲以上を選んでください。', 'error');
+      return null;
+    }
+    return P.buildPastePrompt(P.systemForProfile(), P.userForProfile(selected), PROFILE_SCHEMA);
+  }
+  if (kind === 'learn') {
+    const items = selectedLyrics();
+    if (!items.length) {
+      setStatus('l-status', '学習させる歌詞を1曲以上取り込んで、チェックを入れてください。', 'error');
+      return null;
+    }
+    return P.buildPastePrompt(P.systemForLyricStyle(), P.userForLyricStyle(items, aggregateStats(items)), LYRIC_STYLE_SCHEMA);
+  }
+  if (kind === 'feedback') {
+    if (!state.song) return null;
+    saveEdits();
+    const input = feedbackInput();
+    return P.buildPastePrompt(
+      P.systemForFeedback(),
+      P.userForFeedback(state.song, { ...input, hasAudio: !!input.file }) +
+        (input.file ? '\n(生成した曲の音声は、このメッセージと一緒に渡しています)' : ''),
+      FEEDBACK_SCHEMA,
     );
   }
   return null;
@@ -328,12 +604,10 @@ function loadPasted(textareaId, statusId, handler) {
 
 // ---------- 結果の表示 ----------
 function showHooks(result) {
-  state.hooks = result;
-  const cards = (result.candidates || [])
-    .slice()
-    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-    .map(
-      (c, i) => `
+  const sorted = (result.candidates || []).slice().sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+  state.hooks = { ...result, sorted };
+  const cards = sorted.map(
+    (c, i) => `
       <article class="card">
         <h4><span>${esc(c.label)}</span><span class="score">${esc(c.score)}/10</span></h4>
         <p class="meta">切り口:${esc(c.angle)}<br />視点:${esc(c.pov)}</p>
@@ -343,9 +617,7 @@ function showHooks(result) {
         <p class="meta">${esc(c.why)}</p>
         <button class="primary ghost" data-expand="${i}">この案をフル尺に仕上げる</button>
       </article>`,
-    );
-  const sorted = (result.candidates || []).slice().sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
-  state.hooks.sorted = sorted;
+  );
   $('hooks-result').innerHTML = `
     <h3>Aメロ+サビの候補(${sorted.length}案・スコア順)</h3>
     <p class="meta">核:${esc(result.core_message)}</p>
@@ -366,27 +638,59 @@ function showChanges(changes) {
         .map((c) => `<tr><td>${esc(c.before)}</td><td>${esc(c.after)}</td><td>${esc(c.reason)}</td></tr>`)
         .join('')}</tbody>
     </table></div>
-    <p class="hint">完成版は「④ Suno に貼る」タブに入っています。</p>`;
+    <p class="hint">完成版は「STEP 4 Suno に貼る」に入っています。</p>`;
 }
 
-function setAnalysis(a, local) {
-  state.analysis = { ...a, local };
-  store.set('analysis', state.analysis);
+function setAnalysis(a, local, label) {
+  const entry = { ...a, local, id: uid(), label: label || a.identified_as, savedAt: new Date().toISOString(), selected: true };
+  state.lastAnalysis = entry;
+  store.set('analysis', entry);
+  state.refs = [entry, ...state.refs].slice(0, MAX_REFS);
+  store.set('refs', state.refs);
   renderAnalysis();
+  renderLibrary();
+  updateChrome();
   $('c-use-ref').checked = true;
   $('e-use-ref').checked = true;
 }
 
+// Gemini の推定とブラウザ内推定が一致しているかを表示(精度の目安)
+function bpmAgreement(a) {
+  const local = a.local?.tempo;
+  const m = String(a.bpm_estimate || '').match(/(\d{2,3}(?:\.\d+)?)/);
+  if (!local || !m) return '';
+  const g = Number(m[1]);
+  const ok = [local.bpm, local.alternative].some((b) => Math.abs(b - g) <= 4);
+  return ok ? '<span class="agree yes">2つの推定が一致</span>' : '<span class="agree no">推定が食い違い・要確認</span>';
+}
+
+// "A minor" / "Am" / "A min" / "A♭ major" などを {主音, 長短} に揃える
+function parseKey(text) {
+  const m = String(text || '').match(/([A-G])\s*([#♯b♭]?)\s*(major|minor|maj|min|m(?![a-z]))?/i);
+  if (!m) return null;
+  const acc = { '♯': '#', '♭': 'b' }[m[2]] || m[2];
+  const mode = /^m(in(or)?)?$/i.test(m[3] || '') ? 'minor' : 'major';
+  return `${m[1].toUpperCase()}${acc} ${mode}`;
+}
+
+function keyAgreement(a) {
+  const local = a.local?.key;
+  const g = parseKey(a.key_estimate);
+  if (!local || !g) return '';
+  const ok = [local.key, local.runnerUp].some((k) => parseKey(k) === g);
+  return ok ? '<span class="agree yes">2つの推定が一致</span>' : '<span class="agree no">推定が食い違い・要確認</span>';
+}
+
 function renderAnalysis() {
-  const a = state.analysis;
+  const a = state.lastAnalysis;
   if (!a) return;
   const list = (arr) => esc((arr || []).join(', '));
   const rows = [
     ['推定した曲', esc(a.identified_as)],
     ['ジャンル', `${esc(a.genre)}<br /><small>${list(a.subgenres)}</small>`],
     ['年代感', esc(a.era_feel)],
-    ['テンポ', esc(a.bpm_estimate) + (a.local?.tempo ? `<br /><small>ブラウザ内推定:約 ${a.local.tempo.bpm} BPM</small>` : '')],
-    ['キー', esc(a.key_estimate) + (a.local?.key ? `<br /><small>ブラウザ内推定:${esc(a.local.key.key)}</small>` : '')],
+    ['テンポ', esc(a.bpm_estimate) + bpmAgreement(a) + (a.local?.tempo ? `<br /><small>ブラウザ内推定:約 ${a.local.tempo.bpm} BPM(倍・半分:${a.local.tempo.alternative})</small>` : '')],
+    ['キー', esc(a.key_estimate) + keyAgreement(a) + (a.local?.key ? `<br /><small>ブラウザ内推定:${esc(a.local.key.key)}(次点 ${esc(a.local.key.runnerUp)})</small>` : '')],
     ['拍子', esc(a.time_signature)],
     ['ムード', list(a.mood)],
     ['エネルギーの流れ', esc(a.energy_curve)],
@@ -401,7 +705,7 @@ function renderAnalysis() {
   ];
   $('analysis-result').innerHTML = `
     <div class="analysis">
-      <h3>分析結果</h3>
+      <h3>分析結果:${esc(a.label || '')}</h3>
       <dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v || '—'}</dd>`).join('')}</dl>
       <div class="copy-field">
         <div class="copy-head"><span>この要素の Suno Style</span><button id="a-copy-style">コピー</button></div>
@@ -409,12 +713,157 @@ function renderAnalysis() {
       </div>
       <p class="hint">Exclude:${esc(a.exclude_styles)}</p>
       <div class="warn-box">${esc(a.caution)}</div>
-      <p class="hint">この分析は ① ② の「参考にする」にチェックを入れると、曲作りに反映されます(歌詞やメロディはコピーしません)。</p>
+      <p class="hint">STEP 2・3 の「参考にする」にチェックを入れると、曲作りに反映されます(歌詞やメロディはコピーしません)。</p>
     </div>`;
   $('a-copy-style').onclick = () => copyText(a.suno_style);
 }
 
-function setSong(song, source) {
+function renderLibrary() {
+  $('ref-library').innerHTML = state.refs.length
+    ? state.refs
+        .map(
+          (r) => `
+      <div class="ref-item">
+        <label><input type="checkbox" data-ref-select="${r.id}" ${r.selected ? 'checked' : ''} />
+          <span><b>${esc(r.label)}</b><small>${esc(r.genre)}・${esc(r.bpm_estimate)}・${esc(r.key_estimate)}</small></span></label>
+        <button class="sub" data-ref-show="${r.id}">表示</button>
+        <button class="sub" data-ref-del="${r.id}">削除</button>
+      </div>`,
+        )
+        .join('')
+    : '<div class="empty">まだ参考曲がありません。上で分析すると追加されます。</div>';
+}
+
+function setProfile(p) {
+  state.profile = p;
+  store.set('profile', p);
+  renderProfile();
+  $('c-use-ref').checked = true;
+  $('e-use-ref').checked = true;
+}
+
+function renderProfile() {
+  const p = state.profile;
+  if (!p) {
+    $('profile-result').innerHTML = '';
+    return;
+  }
+  $('profile-result').innerHTML = `
+    <div class="analysis">
+      <h3>ジャンルの定番プロファイル</h3>
+      <p>${esc(p.summary)}</p>
+      <dl>
+        <dt>共通する定番</dt><dd>${(p.common_traits || []).map(esc).join('<br />')}</dd>
+        <dt>各曲の個性</dt><dd>${(p.distinctive_choices || []).map(esc).join('<br />')}</dd>
+        <dt>テンポの範囲</dt><dd>${esc(p.tempo_range)}</dd>
+        <dt>構成の型</dt><dd>${esc(p.structure_template)}</dd>
+        <dt>フックの作り方</dt><dd>${(p.hook_patterns || []).map(esc).join('<br />')}</dd>
+        <dt>ボーカル</dt><dd>${esc(p.vocal_direction)}</dd>
+      </dl>
+      <div class="copy-field">
+        <div class="copy-head"><span>土台にする Suno Style</span><button id="p-copy-style">コピー</button></div>
+        <textarea rows="3" readonly>${esc(p.blended_style)}</textarea>
+      </div>
+      <div class="warn-box">${esc(p.caution)}</div>
+      <div class="actions"><button class="sub" id="p-clear">このプロファイルを使わない</button></div>
+      <p class="hint">「参考にする」にチェックを入れると、個別の参考曲よりこのプロファイルが優先されます。</p>
+    </div>`;
+  $('p-copy-style').onclick = () => copyText(p.blended_style);
+  $('p-clear').onclick = () => {
+    state.profile = null;
+    store.set('profile', null);
+    renderProfile();
+    toast('プロファイルを外しました');
+  };
+}
+
+function renderLyricLibrary() {
+  $('lyric-library').innerHTML = state.lyricItems.length
+    ? state.lyricItems
+        .map((l) => {
+          const lines = l.lyrics.split('\n').filter((x) => x.trim() && !/^\s*\[/.test(x)).length;
+          return `
+      <div class="ref-item">
+        <label><input type="checkbox" data-lyric-select="${l.id}" ${l.selected ? 'checked' : ''} />
+          <span><b>${esc(l.label)}</b><small>${lines}行</small></span></label>
+        <button class="sub" data-lyric-del="${l.id}">削除</button>
+      </div>`;
+        })
+        .join('')
+    : '<div class="empty">まだ歌詞がありません。上の欄に貼って「歌詞を取り込む」を押してください。</div>';
+}
+
+function setLyricStyle(st, stats) {
+  state.lyricStyle = { ...st, stats: stats ? { songs: stats.songs, mean_chars_per_line: stats.mean_chars_per_line, mean_packable_kana_percent: stats.mean_packable_kana_percent, mean_repeated_line_percent: stats.mean_repeated_line_percent } : null, learnedAt: new Date().toISOString() };
+  state.useLyricStyle = true;
+  store.set('lyricStyle', state.lyricStyle);
+  store.set('useLyricStyle', true);
+  applyLearnedStyle();
+  renderLyricStyle();
+  updateChrome();
+}
+
+function renderLyricStyle() {
+  const st = state.lyricStyle;
+  if (!st) {
+    $('style-result').innerHTML = '';
+    return;
+  }
+  const s = st.stats;
+  $('style-result').innerHTML = `
+    <div class="analysis">
+      <h3>学習した書き方 ${state.useLyricStyle ? '<span class="agree yes">作詞に反映中</span>' : '<span class="agree no">反映していません</span>'}</h3>
+      <p>${esc(st.summary)}</p>
+      ${s ? `<p class="hint">集計:${s.songs}曲/1行平均 ${s.mean_chars_per_line} 文字/1音符にまとめやすい文字 ${s.mean_packable_kana_percent}%/繰り返し行 ${s.mean_repeated_line_percent}%</p>` : ''}
+      <dl>
+        <dt>1行の長さ</dt><dd>${esc(st.line_length)}</dd>
+        <dt>言葉の詰め方</dt><dd>${esc(st.packing)}</dd>
+        <dt>ハモリ・コーラス</dt><dd>${esc(st.layering)}</dd>
+        <dt>繰り返し</dt><dd>${esc(st.repetition)}</dd>
+        <dt>韻・リズム</dt><dd>${esc(st.rhyme)}</dd>
+        <dt>語彙</dt><dd>${esc(st.vocabulary)}</dd>
+        <dt>人称・視点</dt><dd>${esc(st.pov)}</dd>
+        <dt>描写</dt><dd>${esc(st.imagery)}</dd>
+        <dt>守る</dt><dd>${(st.do_list || []).map(esc).join('<br />')}</dd>
+        <dt>避ける</dt><dd>${(st.dont_list || []).map(esc).join('<br />')}</dd>
+      </dl>
+    </div>`;
+}
+
+function showFeedback(fb) {
+  state.lastFeedback = fb;
+  $('feedback-result').innerHTML = `
+    <h3>診断結果</h3>
+    ${fb.heard && fb.heard !== '音声なし' ? `<div class="verdict"><b>聴き取れたこと:</b>${esc(fb.heard)}</div>` : ''}
+    <div class="table-scroll"><table class="changes">
+      <thead><tr><th>症状</th><th>原因</th><th>直し方</th></tr></thead>
+      <tbody>${(fb.diagnosis || []).map((d) => `<tr><td>${esc(d.symptom)}</td><td>${esc(d.cause)}</td><td>${esc(d.fix)}</td></tr>`).join('')}</tbody>
+    </table></div>
+    <h4>変えてはいけない点</h4>
+    <ul>${(fb.keep || []).map((k) => `<li>${esc(k)}</li>`).join('')}</ul>
+    <h4>次の生成で試すこと</h4>
+    <ol>${(fb.try_next || []).map((k) => `<li>${esc(k)}</li>`).join('')}</ol>
+    <div class="copy-field">
+      <div class="copy-head"><span>修正版の Style</span></div>
+      <textarea rows="3" readonly>${esc(fb.style)}</textarea>
+    </div>
+    <div class="actions"><button class="primary" id="f-apply">この修正版を STEP 4 に反映する(新しい版として保存)</button></div>`;
+  $('f-apply').onclick = () => {
+    const merged = { ...state.song, title: fb.title || state.song.title, style: fb.style, exclude_styles: fb.exclude_styles, lyrics: fb.lyrics || state.song.lyrics };
+    setSong(merged, '聴いて直す', { revision: true });
+  };
+}
+
+function renderFeedbackHeader() {
+  const s = state.song;
+  $('f-current').innerHTML = s
+    ? `対象の曲:<b>${esc(s.title)}</b>(v${s.version || 1})。STEP 4 で書き換えた内容も反映されます。`
+    : 'まだ曲がありません。STEP 2 か 3 で作るか、「履歴」から開いてください。';
+}
+
+// ---------- 曲の保存と表示 ----------
+function setSong(song, source, { revision = false } = {}) {
+  const prev = state.song;
   const clean = {
     ...song,
     title: String(song.title || '').trim(),
@@ -422,8 +871,15 @@ function setSong(song, source) {
     exclude_styles: normalizeStyle(song.exclude_styles),
     lyrics: normalizeLyrics(song.lyrics),
     source,
+    songId: revision && prev?.songId ? prev.songId : uid(),
+    version: revision && prev ? (prev.version || 1) + 1 : 1,
     createdAt: new Date().toISOString(),
   };
+  // 推敲以外の経路では古い採点表を持ち越さない
+  if (!song.critique) {
+    delete clean.critique;
+    delete clean.verdict;
+  }
   state.song = clean;
   store.set('song', clean);
   const history = store.get('history', []);
@@ -431,8 +887,9 @@ function setSong(song, source) {
   store.set('history', history.slice(0, 30));
   renderSong();
   renderHistory();
+  updateChrome();
   switchTab('output');
-  toast('Suno 用の出力ができました');
+  toast(revision ? `v${clean.version} として保存しました` : 'Suno 用の出力ができました');
 }
 
 function renderSong() {
@@ -440,7 +897,7 @@ function renderSong() {
   $('song-empty').hidden = !!s;
   $('song-view').hidden = !s;
   if (!s) return;
-  $('o-title-view').textContent = s.title;
+  $('o-title-view').innerHTML = `${esc(s.title)}<span class="version">v${s.version || 1}</span>`;
   $('o-concept').textContent = [s.concept, s.core_message && `核:${s.core_message}`].filter(Boolean).join(' / ');
   const pov = s.pov || {};
   $('o-pov').innerHTML = [
@@ -459,11 +916,29 @@ function renderSong() {
   $('o-exclude').value = s.exclude_styles || '';
   $('o-lyrics').value = s.lyrics;
   updateCounts();
+  renderCritique(s);
   $('o-psych').innerHTML = (s.psychology_notes || [])
     .map((n) => `<div class="psych"><b>${esc(n.technique)}</b>${esc(n.where)}<small>${esc(n.why)}</small></div>`)
     .join('');
   $('o-review').innerHTML = (s.self_review || []).map((t) => `<li>${esc(t)}</li>`).join('');
   $('o-next').innerHTML = (s.next_steps || []).map((t) => `<li>${esc(t)}</li>`).join('');
+}
+
+function renderCritique(s) {
+  if (!s.critique?.length) {
+    $('o-critique').innerHTML = '';
+    return;
+  }
+  const avg = Math.round((s.critique.reduce((a, c) => a + (c.score || 0), 0) / s.critique.length) * 10) / 10;
+  $('o-critique').innerHTML = `
+    <h4>推敲の採点表(平均 ${avg} / 10)</h4>
+    <div class="table-scroll"><table class="critique">
+      <thead><tr><th>基準</th><th>点</th><th>問題点</th><th>直したこと</th></tr></thead>
+      <tbody>${s.critique
+        .map((c) => `<tr><td>${esc(c.criterion)}</td><td class="${c.score >= 8 ? 'high' : 'low'}">${esc(c.score)}</td><td>${esc(c.issue)}</td><td>${esc(c.fix)}</td></tr>`)
+        .join('')}</tbody>
+    </table></div>
+    <div class="verdict">${esc(s.verdict)}</div>`;
 }
 
 function currentEdited() {
@@ -487,7 +962,7 @@ function updateCounts() {
   setCount('o-lyrics-count', song.lyrics.length, LIMITS.lyrics);
   const warnings = lintSong(song);
   $('o-warnings').innerHTML = warnings.length
-    ? `<div class="warn-box"><ul>${warnings.map((w) => `<li>${esc(w)}</li>`).join('')}</ul></div>`
+    ? `<div class="warn-box"><b>機械チェック(${warnings.length}件)</b><ul>${warnings.map((w) => `<li>${esc(w)}</li>`).join('')}</ul></div>`
     : '';
 }
 
@@ -504,7 +979,7 @@ function renderHistory() {
         .map(
           (h, i) => `
         <div class="history-item">
-          <div><b>${esc(h.title)}</b><small>${esc(new Date(h.createdAt).toLocaleString('ja-JP'))}・${esc(h.source)}</small></div>
+          <div><b>${esc(h.title)}</b> <span class="version">v${h.version || 1}</span><small>${esc(new Date(h.createdAt).toLocaleString('ja-JP'))}・${esc(h.source)}</small></div>
           <button class="sub" data-history="${i}">開く</button>
         </div>`,
         )
@@ -533,6 +1008,21 @@ function renderKnowledge() {
     .join('');
 }
 
+// ---------- 入力の下書き保存 ----------
+const DRAFT_IDS = ['c-message', 'c-audience', 'c-narrator', 'c-when', 'c-genre', 'c-mood', 'c-vocal', 'c-language', 'c-length', 'c-count', 'c-extra', 'e-lyrics', 'e-message', 'e-genre', 'e-strength', 'e-extra', 'a-title', 'a-notes', 'a-youtube', 'f-comment', 'l-label', 'l-lyrics'];
+
+function restoreDrafts() {
+  const drafts = store.get('drafts', {});
+  for (const id of DRAFT_IDS) if (drafts[id] != null && $(id)) $(id).value = drafts[id];
+  for (const id of DRAFT_IDS) {
+    $(id)?.addEventListener('input', () => {
+      const d = store.get('drafts', {});
+      d[id] = $(id).value;
+      store.set('drafts', d);
+    });
+  }
+}
+
 // ---------- 設定 ----------
 function loadSettingsForm() {
   const s = settings();
@@ -541,6 +1031,7 @@ function loadSettingsForm() {
   $('s-claude-effort').value = s.claudeEffort;
   $('s-gemini-key').value = s.geminiKey || '';
   $('s-gemini-model').value = s.geminiModel;
+  $('s-auto-review').checked = s.autoReview;
 }
 
 function saveSettingsForm() {
@@ -550,7 +1041,9 @@ function saveSettingsForm() {
     claudeEffort: $('s-claude-effort').value,
     geminiKey: $('s-gemini-key').value.trim(),
     geminiModel: $('s-gemini-model').value.trim() || DEFAULTS.geminiModel,
+    autoReview: $('s-auto-review').checked,
   });
+  updateChrome();
   toast('設定を保存しました');
 }
 
@@ -558,19 +1051,26 @@ function saveSettingsForm() {
 function bind() {
   document.querySelectorAll('[role=tab]').forEach((b) => b.addEventListener('click', () => switchTab(b.dataset.tab)));
 
-  document.querySelectorAll('[data-run]').forEach((b) =>
-    b.addEventListener('click', () => {
-      const run = { hooks: runHooks, compose: () => runCompose(), enhance: runEnhance, analyze: runAnalyze }[b.dataset.run];
-      run?.();
-    }),
-  );
+  const runners = {
+    auto: runAuto,
+    hooks: runHooks,
+    compose: () => runCompose(),
+    enhance: runEnhance,
+    analyze: runAnalyze,
+    review: runReview,
+    profile: runProfile,
+    learn: runLearn,
+    feedback: runFeedback,
+  };
+  document.querySelectorAll('[data-run]').forEach((b) => b.addEventListener('click', () => runners[b.dataset.run]?.()));
 
   document.querySelectorAll('[data-copy-prompt]').forEach((b) =>
     b.addEventListener('click', () => {
       const text = pastePromptFor(b.dataset.copyPrompt);
       if (text) {
         copyText(text);
-        b.closest('.panel').querySelector('details.paste').open = true;
+        const details = b.closest('details');
+        if (details) details.open = true;
       }
     }),
   );
@@ -583,9 +1083,13 @@ function bind() {
   $('e-paste-load').onclick = () =>
     loadPasted('e-paste', 'e-status', (data) => {
       showChanges(data.changes);
-      setSong(data, 'Gemini(コピペ)');
+      setSong(data, 'Gemini(コピペ)', { revision: isSameSong($('e-lyrics').value) });
     });
-  $('a-paste-load').onclick = () => loadPasted('a-paste', 'a-status', (data) => setAnalysis(data, null));
+  $('a-paste-load').onclick = () => loadPasted('a-paste', 'a-status', (data) => setAnalysis(data, null, $('a-title').value.trim()));
+  $('p-paste-load').onclick = () => loadPasted('p-paste', 'p-status', setProfile);
+  $('l-paste-load').onclick = () => loadPasted('l-paste', 'l-status', (data) => setLyricStyle(data, aggregateStats(selectedLyrics())));
+  $('r-paste-load').onclick = () => loadPasted('r-paste', 'r-status', (data) => setSong(data, 'Claude 推敲(コピペ)', { revision: true }));
+  $('f-paste-load').onclick = () => loadPasted('f-paste', 'f-status', showFeedback);
   $('a-local').onclick = runLocalOnly;
 
   $('hooks-result').addEventListener('click', (e) => {
@@ -601,6 +1105,71 @@ function bind() {
     }
   });
 
+  // 参考曲ライブラリ
+  $('ref-library').addEventListener('click', (e) => {
+    const sel = e.target.closest('[data-ref-select]');
+    const show = e.target.closest('[data-ref-show]');
+    const del = e.target.closest('[data-ref-del]');
+    if (sel) {
+      const r = state.refs.find((x) => x.id === sel.dataset.refSelect);
+      if (r) r.selected = sel.checked;
+    } else if (show) {
+      state.lastAnalysis = state.refs.find((x) => x.id === show.dataset.refShow);
+      renderAnalysis();
+      $('analysis-result').scrollIntoView({ behavior: 'smooth' });
+      return;
+    } else if (del) {
+      state.refs = state.refs.filter((x) => x.id !== del.dataset.refDel);
+      renderLibrary();
+    } else {
+      return;
+    }
+    store.set('refs', state.refs);
+  });
+
+  // 歌詞の学習
+  $('l-add').onclick = () => {
+    const lyrics = $('l-lyrics').value.trim();
+    if (!lyrics) {
+      setStatus('l-status', '取り込む歌詞を貼り付けてください。', 'error');
+      return;
+    }
+    const label = $('l-label').value.trim() || `歌詞${state.lyricItems.length + 1}`;
+    state.lyricItems = [{ id: uid(), label, lyrics, selected: true }, ...state.lyricItems].slice(0, MAX_LYRICS);
+    store.set('lyrics', state.lyricItems);
+    $('l-lyrics').value = '';
+    $('l-label').value = '';
+    const d = store.get('drafts', {});
+    delete d['l-lyrics'];
+    delete d['l-label'];
+    store.set('drafts', d);
+    setStatus('l-status', '');
+    renderLyricLibrary();
+    toast('歌詞を取り込みました');
+  };
+  $('lyric-library').addEventListener('click', (e) => {
+    const sel = e.target.closest('[data-lyric-select]');
+    const del = e.target.closest('[data-lyric-del]');
+    if (sel) {
+      const l = state.lyricItems.find((x) => x.id === sel.dataset.lyricSelect);
+      if (l) l.selected = sel.checked;
+    } else if (del) {
+      state.lyricItems = state.lyricItems.filter((x) => x.id !== del.dataset.lyricDel);
+      renderLyricLibrary();
+    } else {
+      return;
+    }
+    store.set('lyrics', state.lyricItems);
+  });
+  $('l-clear-style').onclick = () => {
+    state.useLyricStyle = false;
+    store.set('useLyricStyle', false);
+    applyLearnedStyle();
+    renderLyricStyle();
+    toast('学習結果を作詞に使わない設定にしました');
+  };
+
+  // ④
   ['o-title', 'o-style', 'o-exclude', 'o-lyrics'].forEach((id) =>
     $(id).addEventListener('input', () => {
       updateCounts();
@@ -610,16 +1179,21 @@ function bind() {
   document.querySelectorAll('[data-copy]').forEach((b) => b.addEventListener('click', () => copyText($(b.dataset.copy).value)));
   $('o-copy-all').onclick = () => copyText(toCopyBlock(currentEdited()));
   $('o-to-enhance').onclick = () => {
+    saveEdits();
     $('e-lyrics').value = $('o-lyrics').value;
     $('e-message').value = state.song?.core_message || '';
     switchTab('enhance');
+  };
+  $('o-to-feedback').onclick = () => {
+    saveEdits();
+    switchTab('feedback');
   };
   $('o-download').onclick = () => {
     const song = currentEdited();
     const blob = new Blob([toCopyBlock(song)], { type: 'text/plain;charset=utf-8' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `${song.title || 'song'}.txt`;
+    a.download = `${song.title || 'song'}_v${song.version || 1}.txt`;
     a.click();
     URL.revokeObjectURL(a.href);
   };
@@ -640,21 +1214,65 @@ function bind() {
     delete s.geminiKey;
     store.set('settings', s);
     loadSettingsForm();
+    updateChrome();
     toast('APIキーを削除しました');
+  };
+
+  // ページ先頭へ戻るボタン
+  const toTop = $('to-top');
+  window.addEventListener('scroll', () => (toTop.hidden = window.scrollY < 600), { passive: true });
+  toTop.onclick = () => window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ---------- 画面の付帯情報(キーの状態・手順タブのバッジ・注意書き) ----------
+function updateChrome() {
+  const s = settings();
+  const badge = (on) => `<b class="${on ? 'on' : 'off'}">${on ? '設定済み' : 'なし'}</b>`;
+  $('key-state').innerHTML = `APIキー:Claude ${badge(!!s.claudeKey)} Gemini ${badge(!!s.geminiKey)}`;
+  const refs = state.refs.length;
+  const learned = state.lyricStyle && state.useLyricStyle;
+  $('nb-analyze').textContent = [refs ? `参考${refs}曲` : '', learned ? '書き方を学習済み' : ''].filter(Boolean).join('・') || 'Gemini・任意';
+  $('nb-output').textContent = state.song ? `${state.song.title.slice(0, 10)} v${state.song.version || 1}` : '';
+  const n = store.get('history', []).length;
+  $('nb-history').textContent = n ? `${n}件` : '';
+}
+
+function renderRightsBanner() {
+  const el = $('rights-banner');
+  if (store.get('rightsDismissed', false)) {
+    el.hidden = true;
+    return;
+  }
+  el.hidden = false;
+  el.innerHTML =
+    `<p><b>商用利用の注意:</b>${esc(SUNO_RIGHTS_NOTE.text)} ` +
+    `<a href="${SUNO_RIGHTS_NOTE.url}" target="_blank" rel="noopener">Suno 公式ヘルプ</a></p>` +
+    '<button type="button" id="rights-close">理解した</button>';
+  $('rights-close').onclick = () => {
+    store.set('rightsDismissed', true);
+    renderRightsBanner();
   };
 }
 
 function init() {
-  $('rights-banner').innerHTML =
-    `<b>商用利用の注意:</b>${esc(SUNO_RIGHTS_NOTE.text)} ` +
-    `<a href="${SUNO_RIGHTS_NOTE.url}" target="_blank" rel="noopener">Suno 公式ヘルプ</a>`;
+  renderRightsBanner();
+  $('f-symptoms').innerHTML = SYMPTOMS.map(
+    (s, i) => `<label><input type="checkbox" id="f-sym-${i}" value="${esc(s)}" /> ${esc(s)}</label>`,
+  ).join('');
+  applyLearnedStyle();
   bind();
+  restoreDrafts();
   loadSettingsForm();
   renderKnowledge();
   renderSong();
   renderHistory();
   renderAnalysis();
-  switchTab(store.get('tab', 'compose'));
+  renderLibrary();
+  renderProfile();
+  renderLyricLibrary();
+  renderLyricStyle();
+  updateChrome();
+  switchTab(store.get('tab', 'compose'), { scroll: false });
 }
 
 init();

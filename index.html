@@ -2,258 +2,426 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Music Creator</title>
   <meta name="description" content="伝えたいメッセージから、Suno にそのまま貼れる楽曲を作る制作システム" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Zen+Kaku+Gothic+New:wght@500;700;900&family=Zen+Old+Mincho:wght@700;900&display=swap" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <header class="site-header">
-    <div class="wrap header-inner">
-      <div>
-        <h1>Music Creator</h1>
-        <p class="tagline">伝えたいメッセージを、Suno にそのまま貼れる1曲に。</p>
+  <header class="top">
+    <div class="wrap top-inner">
+      <div class="brand">
+        <p class="eyebrow">MUSIC CREATOR</p>
+        <h1>伝えたい言葉を、<span class="nb">鳴る1曲に。</span></h1>
+        <p class="lead">Claude が書き、Gemini が磨き、Suno が鳴らす。<br />音楽心理学の知見をもとに、Suno にそのまま貼れる形で仕上げます。</p>
       </div>
-      <a class="textbook-link" href="textbook.html">📘 使い方の教科書</a>
+      <div class="top-links">
+        <a class="pill-link" href="textbook.html">使い方の教科書</a>
+        <span id="key-state" class="key-state"></span>
+      </div>
     </div>
-    <nav class="tabs wrap" role="tablist">
-      <button role="tab" data-tab="compose" aria-selected="true">① メッセージから作る</button>
-      <button role="tab" data-tab="enhance">② 歌詞を補強</button>
-      <button role="tab" data-tab="analyze">③ サンプル分析</button>
-      <button role="tab" data-tab="output">④ Suno に貼る</button>
-      <button role="tab" data-tab="knowledge">ナレッジ</button>
-      <button role="tab" data-tab="history">履歴</button>
-      <button role="tab" data-tab="settings">設定</button>
-    </nav>
   </header>
 
-  <main class="wrap">
-    <div id="rights-banner" class="notice"></div>
-
-    <!-- ① メッセージから作る(Claude) -->
-    <section class="panel" data-panel="compose">
-      <h2>① メッセージから作る <span class="badge claude">Claude</span></h2>
-      <p class="lead">伝えたいことを書くだけで、歌詞と Suno 用の Style を作ります。<br />
-        おすすめは「Aメロ+サビを量産」→ 気に入った案を「フル尺に仕上げる」の流れです。</p>
-
-      <label class="field">
-        <span>伝えたいメッセージ <b class="req">必須</b></span>
-        <textarea id="c-message" rows="4" placeholder="例:失敗続きでも、昨日より一歩進めたなら、それで十分だと伝えたい"></textarea>
-      </label>
-
-      <div class="grid">
-        <label class="field"><span>聴いてほしい人</span><input id="c-audience" placeholder="例:就活に疲れた大学生" /></label>
-        <label class="field"><span>語り手(誰が歌うか)</span><input id="c-narrator" placeholder="例:同じ道を通ってきた3つ上の先輩" /></label>
-        <label class="field"><span>時点(いつの気持ちか)</span><input id="c-when" placeholder="例:落ちた面接の帰り道の夜" /></label>
-        <label class="field"><span>ジャンル</span><input id="c-genre" placeholder="例:J-pop ロックバラード" /></label>
-        <label class="field"><span>ムード</span><input id="c-mood" placeholder="例:切ないけど前向き" /></label>
-        <label class="field"><span>ボーカル</span><input id="c-vocal" placeholder="例:ハスキーな男性ボーカル" /></label>
-        <label class="field"><span>言語</span>
-          <select id="c-language">
-            <option value="">日本語(サビに短い英語可)</option>
-            <option>日本語のみ</option>
-            <option>英語のみ</option>
-            <option>日本語と英語を半々</option>
-          </select>
-        </label>
-        <label class="field"><span>曲の長さ</span>
-          <select id="c-length">
-            <option value="">3分前後</option>
-            <option>2分前後(ショート動画向け)</option>
-            <option>4分前後</option>
-          </select>
-        </label>
-        <label class="field"><span>量産する案の数</span>
-          <select id="c-count"><option>5</option><option selected>10</option><option>15</option><option>20</option></select>
-        </label>
+  <div class="shell">
+    <nav class="side" aria-label="制作の手順">
+      <p class="side-head">制作の流れ</p>
+      <div class="tabs" role="tablist">
+        <button role="tab" data-tab="analyze"><b class="no">1</b><span>参考曲・歌詞の学習<small id="nb-analyze"></small></span></button>
+        <button role="tab" data-tab="compose" aria-selected="true"><b class="no">2</b><span>メッセージから作る<small id="nb-compose">Claude</small></span></button>
+        <button role="tab" data-tab="enhance"><b class="no">3</b><span>歌詞を補強<small>Gemini</small></span></button>
+        <button role="tab" data-tab="output"><b class="no">4</b><span>Suno に貼る<small id="nb-output"></small></span></button>
+        <button role="tab" data-tab="feedback"><b class="no">5</b><span>聴いて直す<small>Gemini</small></span></button>
+        <span class="tab-sep" aria-hidden="true"></span>
+        <button role="tab" data-tab="history" class="sub-tab"><span>履歴<small id="nb-history"></small></span></button>
+        <button role="tab" data-tab="knowledge" class="sub-tab"><span>ナレッジ</span></button>
+        <button role="tab" data-tab="settings" class="sub-tab"><span>設定</span></button>
       </div>
-      <label class="field"><span>その他の希望</span><input id="c-extra" placeholder="例:サビは英語1フレーズで始めたい" /></label>
-      <label class="check"><input type="checkbox" id="c-use-ref" /> ③ で分析したサンプル楽曲の要素を参考にする</label>
+    </nav>
 
-      <div class="actions">
-        <button class="primary" data-run="hooks">Aメロ+サビを量産</button>
-        <button class="primary ghost" data-run="compose">いきなり1曲フルで作る</button>
-        <button class="sub" data-copy-prompt="hooks">キーなし:量産プロンプトをコピー</button>
-        <button class="sub" data-copy-prompt="compose">キーなし:1曲プロンプトをコピー</button>
-      </div>
-      <details class="paste" data-paste="compose-or-hooks">
-        <summary>キーなしで使う:claude.ai の返答を貼り付けて読み込む</summary>
-        <ol class="steps-mini">
-          <li>上の「キーなし」ボタンでプロンプトをコピー</li>
-          <li><a href="https://claude.ai/new" target="_blank" rel="noopener">claude.ai</a> に貼り付けて送信</li>
-          <li>返ってきた JSON を下に貼り、「読み込む」を押す</li>
-        </ol>
-        <textarea id="c-paste" rows="5" placeholder='{"title": ... } または {"candidates": ... }'></textarea>
-        <button class="sub" id="c-paste-load">読み込む</button>
-      </details>
+    <main class="wrap main">
+      <div id="rights-banner" class="notice" hidden></div>
 
-      <div id="c-status" class="status" hidden></div>
-      <div id="hooks-result"></div>
-    </section>
+      <!-- 1 参考曲・歌詞の学習(Gemini) -->
+      <section class="panel" data-panel="analyze" hidden>
+        <div class="panel-head">
+          <p class="step-label">STEP 1 <span class="badge gemini">Gemini</span><span class="optional">任意</span></p>
+          <h2>参考曲・歌詞の学習</h2>
+          <p class="lead-s">好きな曲と歌詞から「定番」と「書き方の傾向」を学ばせます。<br />ここで学習した内容は、STEP 2〜5 の作詞と推敲に反映されます。</p>
+        </div>
 
-    <!-- ② 歌詞を補強(Gemini) -->
-    <section class="panel" data-panel="enhance" hidden>
-      <h2>② 歌詞を補強 <span class="badge gemini">Gemini</span></h2>
-      <p class="lead">できている歌詞を磨き上げ、Suno 用の Style プロンプトを作ります。<br />
-        視点のブレや、テーマ用語の詰め込みも直します。</p>
-      <label class="field">
-        <span>補強したい歌詞 <b class="req">必須</b></span>
-        <textarea id="e-lyrics" rows="12" placeholder="[Verse 1]&#10;……&#10;&#10;[Chorus]&#10;……"></textarea>
-      </label>
-      <div class="grid">
-        <label class="field"><span>この曲で伝えたいこと</span><input id="e-message" placeholder="空欄なら歌詞から読み取ります" /></label>
-        <label class="field"><span>希望ジャンル・音</span><input id="e-genre" placeholder="例:2020年代のシティポップ" /></label>
-        <label class="field"><span>補強の強さ</span>
-          <select id="e-strength">
-            <option value="">中(弱い所を中心に直す)</option>
-            <option>弱(Style 作成とタグ整理が中心。歌詞はほぼそのまま)</option>
-            <option>強(サビも含めて大胆に磨く。ただしメッセージは変えない)</option>
-          </select>
-        </label>
-      </div>
-      <label class="field"><span>その他の希望</span><input id="e-extra" placeholder="例:サビの最後をもっと覚えやすく" /></label>
-      <label class="check"><input type="checkbox" id="e-use-ref" /> ③ で分析したサンプル楽曲の要素を参考にする</label>
-      <div class="actions">
-        <button class="primary" data-run="enhance">Gemini で補強する</button>
-        <button class="sub" data-copy-prompt="enhance">キーなし:プロンプトをコピー</button>
-      </div>
-      <details class="paste">
-        <summary>キーなしで使う:Gemini の返答を貼り付けて読み込む</summary>
-        <ol class="steps-mini">
-          <li>「キーなし」ボタンでプロンプトをコピー</li>
-          <li><a href="https://gemini.google.com/app" target="_blank" rel="noopener">Gemini</a> に貼り付けて送信</li>
-          <li>返ってきた JSON を下に貼り、「読み込む」を押す</li>
-        </ol>
-        <textarea id="e-paste" rows="5"></textarea>
-        <button class="sub" id="e-paste-load">読み込む</button>
-      </details>
-      <div id="e-status" class="status" hidden></div>
-      <div id="changes-result"></div>
-    </section>
-
-    <!-- ③ サンプル分析(Gemini) -->
-    <section class="panel" data-panel="analyze" hidden>
-      <h2>③ サンプル楽曲の要素を抽出 <span class="badge gemini">Gemini</span></h2>
-      <p class="lead">参考にしたい曲の「その曲らしさ」を分解し、Suno 用の Style に変換します。<br />
-        音声ファイル・YouTube の URL・曲名のどれか1つでOKです。</p>
-      <div class="grid">
-        <label class="field"><span>音声ファイル(mp3 / wav など、15MB まで)</span><input type="file" id="a-file" accept="audio/*" /></label>
-        <label class="field"><span>YouTube の URL(公開動画のみ)</span><input id="a-youtube" placeholder="https://www.youtube.com/watch?v=..." /></label>
-        <label class="field"><span>曲名・アーティスト</span><input id="a-title" placeholder="例:〇〇 / △△(分かる範囲で)" /></label>
-      </div>
-      <label class="field"><span>特に知りたいこと</span><input id="a-notes" placeholder="例:サビの盛り上げ方と、ドラムの音作り" /></label>
-      <div class="actions">
-        <button class="primary" data-run="analyze">Gemini で分析する</button>
-        <button class="sub" id="a-local">ブラウザ内でテンポ・キーだけ推定</button>
-        <button class="sub" data-copy-prompt="analyze">キーなし:プロンプトをコピー</button>
-      </div>
-      <details class="paste">
-        <summary>キーなしで使う:Gemini の返答を貼り付けて読み込む</summary>
-        <p class="hint">Gemini アプリに音声ファイルや YouTube の URL を一緒に渡してから、コピーしたプロンプトを送ってください。</p>
-        <textarea id="a-paste" rows="5"></textarea>
-        <button class="sub" id="a-paste-load">読み込む</button>
-      </details>
-      <div id="a-status" class="status" hidden></div>
-      <div id="analysis-result"></div>
-    </section>
-
-    <!-- ④ Suno に貼る -->
-    <section class="panel" data-panel="output" hidden>
-      <h2>④ Suno に貼る</h2>
-      <p class="lead">Suno の「Custom」モードの各欄に、そのままコピーして貼ってください。<br />
-        ここで直接書き換えることもできます。</p>
-      <div id="song-empty" class="empty">まだ曲がありません。① か ② で作ってください。</div>
-      <div id="song-view" hidden>
-        <div class="song-head">
-          <div>
-            <p class="eyebrow">現在の曲</p>
-            <h3 id="o-title-view"></h3>
-            <p id="o-concept" class="concept"></p>
+        <div class="sub-sec">
+          <h3>参考曲を分析する</h3>
+          <p class="hint">音声ファイル・YouTube の URL・曲名のどれか1つで分析できます。</p>
+          <div class="grid">
+            <label class="field"><span>音声ファイル(mp3 / wav など、15MB まで)</span><input type="file" id="a-file" accept="audio/*" /></label>
+            <label class="field"><span>YouTube の URL(公開動画のみ)</span><input id="a-youtube" inputmode="url" placeholder="https://www.youtube.com/watch?v=..." /></label>
+            <label class="field"><span>曲名・アーティスト</span><input id="a-title" placeholder="例:〇〇 / △△(分かる範囲で)" /></label>
           </div>
-          <button class="primary" id="o-copy-all">全部まとめてコピー</button>
-        </div>
-        <div id="o-pov" class="pov"></div>
-        <div id="o-warnings"></div>
-
-        <div class="copy-field">
-          <div class="copy-head"><span>Title</span><button data-copy="o-title">コピー</button></div>
-          <input id="o-title" />
-        </div>
-        <div class="copy-field">
-          <div class="copy-head"><span>Style of Music</span><span class="count" id="o-style-count"></span><button data-copy="o-style">コピー</button></div>
-          <textarea id="o-style" rows="4"></textarea>
-        </div>
-        <div class="copy-field">
-          <div class="copy-head"><span>Exclude Styles</span><button data-copy="o-exclude">コピー</button></div>
-          <input id="o-exclude" />
-        </div>
-        <div class="copy-field">
-          <div class="copy-head"><span>Lyrics</span><span class="count" id="o-lyrics-count"></span><button data-copy="o-lyrics">コピー</button></div>
-          <textarea id="o-lyrics" rows="22" class="lyrics"></textarea>
-        </div>
-        <div class="actions">
-          <button class="primary ghost" id="o-to-enhance">この歌詞を ② Gemini で補強する</button>
-          <button class="sub" id="o-download">テキストで保存</button>
+          <label class="field"><span>特に知りたいこと</span><input id="a-notes" placeholder="例:サビの盛り上げ方と、ドラムの音作り" /></label>
+          <div class="actions">
+            <button class="primary" data-run="analyze">Gemini で分析する</button>
+            <button class="sub" id="a-local">テンポとキーだけ推定(端末内)</button>
+          </div>
+          <details class="paste">
+            <summary>APIキーなしで使う</summary>
+            <ol class="steps-mini">
+              <li><button class="sub" data-copy-prompt="analyze">プロンプトをコピー</button></li>
+              <li><a href="https://gemini.google.com/app" target="_blank" rel="noopener">Gemini アプリ</a>に音声か URL と一緒に貼って送信</li>
+              <li>返ってきた JSON を下に貼って「読み込む」</li>
+            </ol>
+            <textarea id="a-paste" rows="4" placeholder='{"genre": ... }'></textarea>
+            <button class="sub" id="a-paste-load">読み込む</button>
+          </details>
+          <div id="a-status" class="status" hidden></div>
+          <div id="analysis-result"></div>
         </div>
 
-        <div class="explain">
-          <h4>この曲に使った心理学の工夫</h4>
-          <div id="o-psych"></div>
-          <h4>セルフレビューで直した点・残るリスク</h4>
-          <ul id="o-review"></ul>
-          <h4>Suno で生成した後に試すこと</h4>
-          <ul id="o-next"></ul>
+        <div class="sub-sec">
+          <h3>参考曲ライブラリ</h3>
+          <p class="hint">分析した曲がここに貯まります(最大8曲)。2曲以上を選んで共通点を抽出すると、
+            ジャンルの「定番」と各曲の「個性」を分けて、新曲の土台になる Style を作ります。</p>
+          <div id="ref-library"></div>
+          <div class="actions">
+            <button class="primary ghost" data-run="profile">選んだ曲の共通点を抽出</button>
+          </div>
+          <details class="paste">
+            <summary>APIキーなしで使う</summary>
+            <ol class="steps-mini">
+              <li><button class="sub" data-copy-prompt="profile">プロンプトをコピー</button></li>
+              <li>Gemini アプリに貼って送信し、返ってきた JSON を下に貼る</li>
+            </ol>
+            <textarea id="p-paste" rows="4"></textarea>
+            <button class="sub" id="p-paste-load">読み込む</button>
+          </details>
+          <div id="p-status" class="status" hidden></div>
+          <div id="profile-result"></div>
         </div>
-      </div>
-    </section>
 
-    <!-- ナレッジ -->
-    <section class="panel" data-panel="knowledge" hidden>
-      <h2>ナレッジ(AI が参照している知識)</h2>
-      <p class="lead">AI への指示に毎回組み込んでいる知識の一覧です。<br />
-        研究は「傾向」を示すもので、必ずヒットする法則ではありません。</p>
-      <div id="rules-view"></div>
-      <div id="knowledge-view"></div>
-    </section>
+        <div class="sub-sec" id="learn">
+          <h3>歌詞を学習させる</h3>
+          <p class="hint">自分の過去の歌詞や手本にしたい歌詞を取り込むと、行の長さ・言葉の詰め方・繰り返し方・韻・人称などの
+            「書き方の傾向」を学習します(歌詞の文言そのものは使いません)。<br />
+            歌詞はこのブラウザの中だけに保存され、学習するときだけ Gemini に送られます。目安は3曲以上です。</p>
+          <label class="field"><span>名前(曲名など)</span><input id="l-label" placeholder="例:自作曲「改札」" /></label>
+          <label class="field"><span>歌詞(セクションタグがあると精度が上がります)</span>
+            <textarea id="l-lyrics" rows="7" placeholder="[Verse 1]&#10;……&#10;&#10;[Chorus]&#10;……"></textarea></label>
+          <div class="actions">
+            <button class="sub" id="l-add">歌詞を取り込む</button>
+          </div>
+          <div id="lyric-library"></div>
+          <div class="actions">
+            <button class="primary ghost" data-run="learn">選んだ歌詞から書き方を学習</button>
+            <button class="sub" id="l-clear-style">学習結果を使わない</button>
+          </div>
+          <details class="paste">
+            <summary>APIキーなしで使う</summary>
+            <ol class="steps-mini">
+              <li><button class="sub" data-copy-prompt="learn">プロンプトをコピー</button></li>
+              <li>Gemini アプリに貼って送信し、返ってきた JSON を下に貼る</li>
+            </ol>
+            <textarea id="l-paste" rows="4"></textarea>
+            <button class="sub" id="l-paste-load">読み込む</button>
+          </details>
+          <div id="l-status" class="status" hidden></div>
+          <div id="style-result"></div>
+        </div>
+      </section>
 
-    <!-- 履歴 -->
-    <section class="panel" data-panel="history" hidden>
-      <h2>履歴</h2>
-      <p class="lead">作った曲は、このブラウザに最大30件まで保存されます。</p>
-      <div id="history-view"></div>
-    </section>
+      <!-- 2 メッセージから作る(Claude) -->
+      <section class="panel" data-panel="compose">
+        <div class="panel-head">
+          <p class="step-label">STEP 2 <span class="badge claude">Claude</span></p>
+          <h2>メッセージから作る</h2>
+          <p class="lead-s">伝えたいことを書くだけで、歌詞と Suno 用の Style を作ります。</p>
+        </div>
 
-    <!-- 設定 -->
-    <section class="panel" data-panel="settings" hidden>
-      <h2>設定</h2>
-      <p class="lead">API キーは、このブラウザの中にだけ保存されます(外部には、各 AI 会社の API 以外へ送信しません)。<br />
-        キーがなくても「キーなし」ボタンで、claude.ai や Gemini アプリにコピペして使えます。</p>
-      <div class="grid">
-        <label class="field"><span>Claude API キー</span><input id="s-claude-key" type="password" autocomplete="off" placeholder="sk-ant-..." /></label>
-        <label class="field"><span>Claude モデル</span><input id="s-claude-model" /></label>
-        <label class="field"><span>Claude の考える深さ</span>
-          <select id="s-claude-effort">
-            <option value="medium">medium(速い)</option>
-            <option value="high">high(おすすめ)</option>
-            <option value="xhigh">xhigh(じっくり)</option>
-            <option value="max">max(最大・時間がかかる)</option>
-          </select>
+        <label class="field">
+          <span>伝えたいメッセージ <b class="req">必須</b></span>
+          <textarea id="c-message" rows="4" placeholder="例:失敗続きでも、昨日より一歩進めたなら、それで十分だと伝えたい"></textarea>
         </label>
-        <label class="field"><span>Gemini API キー</span><input id="s-gemini-key" type="password" autocomplete="off" placeholder="AIza..." /></label>
-        <label class="field"><span>Gemini モデル</span><input id="s-gemini-model" /></label>
-      </div>
-      <div class="actions">
-        <button class="primary" id="s-save">保存</button>
-        <button class="sub" id="s-clear">キーを削除</button>
-      </div>
-      <ul class="hint-list">
-        <li>Claude の API キー:<a href="https://platform.claude.com/" target="_blank" rel="noopener">Claude Console</a> で発行</li>
-        <li>Gemini の API キー:<a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a> で発行</li>
-        <li>モデル名は新しいものが出たら書き換えてください。</li>
-      </ul>
-    </section>
-  </main>
+        <div class="grid">
+          <label class="field"><span>聴いてほしい人</span><input id="c-audience" placeholder="例:就活に疲れた大学生" /></label>
+          <label class="field"><span>語り手(誰が歌うか)</span><input id="c-narrator" placeholder="例:同じ道を通ってきた3つ上の先輩" /></label>
+          <label class="field"><span>時点(いつの気持ちか)</span><input id="c-when" placeholder="例:落ちた面接の帰り道の夜" /></label>
+        </div>
+        <details class="more-fields">
+          <summary>音や長さも指定する(任意)</summary>
+          <div class="grid">
+            <label class="field"><span>ジャンル</span><input id="c-genre" placeholder="例:J-pop ロックバラード" /></label>
+            <label class="field"><span>ムード</span><input id="c-mood" placeholder="例:切ないけど前向き" /></label>
+            <label class="field"><span>ボーカル</span><input id="c-vocal" placeholder="例:ハスキーな男性ボーカル" /></label>
+            <label class="field"><span>言語</span>
+              <select id="c-language">
+                <option value="">日本語(サビに短い英語可)</option>
+                <option>日本語のみ</option>
+                <option>英語のみ</option>
+                <option>日本語と英語を半々</option>
+              </select>
+            </label>
+            <label class="field"><span>曲の長さ</span>
+              <select id="c-length">
+                <option value="">3分前後</option>
+                <option>2分前後(ショート動画向け)</option>
+                <option>4分前後</option>
+              </select>
+            </label>
+            <label class="field"><span>量産する案の数</span>
+              <select id="c-count"><option>5</option><option selected>10</option><option>15</option><option>20</option></select>
+            </label>
+          </div>
+          <label class="field"><span>その他の希望</span><input id="c-extra" placeholder="例:サビは英語1フレーズで始めたい" /></label>
+        </details>
+        <label class="check"><input type="checkbox" id="c-use-ref" /> STEP 1 の参考曲・定番プロファイルを参考にする</label>
 
+        <div class="choose">
+          <div class="choice featured">
+            <p class="choice-tag">おまかせ</p>
+            <h3>全自動で1曲</h3>
+            <p class="hint">量産 → 最高得点の案 → フル尺 → 推敲 → Gemini で補強、まで一気に。数分かかります。</p>
+            <button class="primary" data-run="auto">全自動で作る</button>
+          </div>
+          <div class="choice">
+            <p class="choice-tag">じっくり(おすすめ)</p>
+            <h3>Aメロ+サビを量産して選ぶ</h3>
+            <p class="hint">案を見比べて、自分で選んだ1案をフル尺に仕上げます。</p>
+            <button class="primary ghost" data-run="hooks">量産する</button>
+          </div>
+          <div class="choice">
+            <p class="choice-tag">すぐに</p>
+            <h3>いきなり1曲フルで</h3>
+            <p class="hint">案出しを飛ばして、1曲を仕上げます。</p>
+            <button class="primary ghost" data-run="compose">1曲作る</button>
+          </div>
+        </div>
+        <ol id="pipeline" class="pipeline" hidden></ol>
+
+        <details class="paste">
+          <summary>APIキーなしで使う(claude.ai にコピペ)</summary>
+          <ol class="steps-mini">
+            <li>
+              <button class="sub" data-copy-prompt="hooks">量産用をコピー</button>
+              <button class="sub" data-copy-prompt="compose">1曲用をコピー</button>
+            </li>
+            <li><a href="https://claude.ai/new" target="_blank" rel="noopener">claude.ai</a> に貼り付けて送信</li>
+            <li>返ってきた JSON を下に貼り、「読み込む」を押す</li>
+          </ol>
+          <textarea id="c-paste" rows="4" placeholder='{"title": ... } または {"candidates": ... }'></textarea>
+          <button class="sub" id="c-paste-load">読み込む</button>
+        </details>
+
+        <div id="c-status" class="status" hidden></div>
+        <div id="hooks-result"></div>
+      </section>
+
+      <!-- 3 歌詞を補強(Gemini) -->
+      <section class="panel" data-panel="enhance" hidden>
+        <div class="panel-head">
+          <p class="step-label">STEP 3 <span class="badge gemini">Gemini</span></p>
+          <h2>歌詞を補強</h2>
+          <p class="lead-s">できている歌詞を磨き、Suno 用の Style プロンプトを作ります。<br />視点のブレや、テーマ用語の詰め込みも直します。</p>
+        </div>
+        <label class="field">
+          <span>補強したい歌詞 <b class="req">必須</b></span>
+          <textarea id="e-lyrics" rows="12" placeholder="[Verse 1]&#10;……&#10;&#10;[Chorus]&#10;……"></textarea>
+        </label>
+        <div class="grid">
+          <label class="field"><span>この曲で伝えたいこと</span><input id="e-message" placeholder="空欄なら歌詞から読み取ります" /></label>
+          <label class="field"><span>希望ジャンル・音</span><input id="e-genre" placeholder="例:2020年代のシティポップ" /></label>
+          <label class="field"><span>補強の強さ</span>
+            <select id="e-strength">
+              <option value="">中(弱い所を中心に直す)</option>
+              <option>弱(Style 作成とタグ整理が中心。歌詞はほぼそのまま)</option>
+              <option>強(サビも含めて大胆に磨く。ただしメッセージは変えない)</option>
+            </select>
+          </label>
+        </div>
+        <label class="field"><span>その他の希望</span><input id="e-extra" placeholder="例:サビの最後をもっと覚えやすく" /></label>
+        <label class="check"><input type="checkbox" id="e-use-ref" /> STEP 1 の参考曲・定番プロファイルを参考にする</label>
+        <div class="actions">
+          <button class="primary" data-run="enhance">Gemini で補強する</button>
+        </div>
+        <details class="paste">
+          <summary>APIキーなしで使う(Gemini にコピペ)</summary>
+          <ol class="steps-mini">
+            <li><button class="sub" data-copy-prompt="enhance">プロンプトをコピー</button></li>
+            <li><a href="https://gemini.google.com/app" target="_blank" rel="noopener">Gemini</a> に貼り付けて送信</li>
+            <li>返ってきた JSON を下に貼り、「読み込む」を押す</li>
+          </ol>
+          <textarea id="e-paste" rows="4"></textarea>
+          <button class="sub" id="e-paste-load">読み込む</button>
+        </details>
+        <div id="e-status" class="status" hidden></div>
+        <div id="changes-result"></div>
+      </section>
+
+      <!-- 4 Suno に貼る -->
+      <section class="panel" data-panel="output" hidden>
+        <div class="panel-head">
+          <p class="step-label">STEP 4</p>
+          <h2>Suno に貼る</h2>
+          <p class="lead-s">Suno の「Custom」モードの各欄に、そのままコピーして貼ってください。ここで直接書き換えることもできます。<br />
+            商用で使う曲は、Suno の有料プランに加入している期間に生成してください。</p>
+        </div>
+        <div id="song-empty" class="empty">まだ曲がありません。STEP 2 か 3 で作ってください。</div>
+        <div id="song-view" hidden>
+          <div class="song-head">
+            <div class="song-title">
+              <h3 id="o-title-view"></h3>
+              <p id="o-concept" class="concept"></p>
+            </div>
+            <button class="primary" id="o-copy-all">4欄まとめてコピー</button>
+          </div>
+          <div id="o-pov" class="pov"></div>
+          <div id="o-warnings"></div>
+
+          <div class="copy-field">
+            <div class="copy-head"><span>Title</span><button data-copy="o-title">コピー</button></div>
+            <input id="o-title" />
+          </div>
+          <div class="copy-field">
+            <div class="copy-head"><span>Style of Music</span><span class="count" id="o-style-count"></span><button data-copy="o-style">コピー</button></div>
+            <textarea id="o-style" rows="4"></textarea>
+          </div>
+          <div class="copy-field">
+            <div class="copy-head"><span>Exclude Styles</span><button data-copy="o-exclude">コピー</button></div>
+            <input id="o-exclude" />
+          </div>
+          <div class="copy-field">
+            <div class="copy-head"><span>Lyrics</span><span class="count" id="o-lyrics-count"></span><button data-copy="o-lyrics">コピー</button></div>
+            <textarea id="o-lyrics" rows="22" class="lyrics"></textarea>
+          </div>
+
+          <div class="next-box">
+            <p class="next-head">次にやること</p>
+            <div class="actions">
+              <button class="primary" data-run="review">AI で厳しく推敲する(Claude)</button>
+              <button class="primary ghost" id="o-to-enhance">Gemini で補強する</button>
+              <button class="primary ghost" id="o-to-feedback">Suno で生成したら → 聴いて直す</button>
+              <button class="sub" id="o-download">テキストで保存</button>
+            </div>
+            <details class="paste">
+              <summary>APIキーなしで推敲する</summary>
+              <ol class="steps-mini">
+                <li><button class="sub" data-copy-prompt="review">推敲プロンプトをコピー</button></li>
+                <li>claude.ai に貼って送信し、返ってきた JSON を下に貼る</li>
+              </ol>
+              <textarea id="r-paste" rows="4"></textarea>
+              <button class="sub" id="r-paste-load">読み込む</button>
+            </details>
+            <div id="r-status" class="status" hidden></div>
+          </div>
+
+          <div id="o-critique"></div>
+          <div class="explain">
+            <details open>
+              <summary><h4>この曲に使った心理学の工夫</h4></summary>
+              <div id="o-psych"></div>
+            </details>
+            <details>
+              <summary><h4>セルフレビューで直した点・残るリスク</h4></summary>
+              <ul id="o-review"></ul>
+            </details>
+            <details>
+              <summary><h4>Suno で生成した後に試すこと</h4></summary>
+              <ul id="o-next"></ul>
+            </details>
+          </div>
+        </div>
+      </section>
+
+      <!-- 5 聴いて直す(Gemini) -->
+      <section class="panel" data-panel="feedback" hidden>
+        <div class="panel-head">
+          <p class="step-label">STEP 5 <span class="badge gemini">Gemini</span></p>
+          <h2>聴いて直す</h2>
+          <p class="lead-s">Suno で生成した曲の感想を入れると、原因を突き止めて、次に貼る修正版を作ります。<br />生成した曲の音声を渡すと、Gemini が実際に聴いて判断します。</p>
+        </div>
+        <div id="f-current" class="current-song"></div>
+        <fieldset class="symptoms">
+          <legend>気になったこと(当てはまるものすべて)</legend>
+          <div id="f-symptoms"></div>
+        </fieldset>
+        <label class="field"><span>感想(自由に)</span><textarea id="f-comment" rows="3" placeholder="例:サビは好き。でもAメロの声が眠そうで、ドラムが軽い"></textarea></label>
+        <label class="field"><span>生成した曲の音声(任意・15MB まで)</span><input type="file" id="f-file" accept="audio/*" /></label>
+        <div class="actions">
+          <button class="primary" data-run="feedback">原因と直し方を出す</button>
+        </div>
+        <details class="paste">
+          <summary>APIキーなしで使う(Gemini にコピペ)</summary>
+          <ol class="steps-mini">
+            <li><button class="sub" data-copy-prompt="feedback">プロンプトをコピー</button></li>
+            <li>Gemini アプリに(音声があれば一緒に)貼って送信し、返ってきた JSON を下に貼る</li>
+          </ol>
+          <textarea id="f-paste" rows="4"></textarea>
+          <button class="sub" id="f-paste-load">読み込む</button>
+        </details>
+        <div id="f-status" class="status" hidden></div>
+        <div id="feedback-result"></div>
+      </section>
+
+      <!-- 履歴 -->
+      <section class="panel" data-panel="history" hidden>
+        <div class="panel-head">
+          <h2>履歴</h2>
+          <p class="lead-s">作った曲は、このブラウザに最大30件まで保存されます。推敲や修正をするたびに、版(v1, v2…)が増えます。</p>
+        </div>
+        <div id="history-view"></div>
+      </section>
+
+      <!-- ナレッジ -->
+      <section class="panel" data-panel="knowledge" hidden>
+        <div class="panel-head">
+          <h2>ナレッジ</h2>
+          <p class="lead-s">AI への指示に毎回組み込んでいる知識です。研究は「傾向」を示すもので、必ずヒットする法則ではありません。</p>
+        </div>
+        <div id="rules-view"></div>
+        <div id="knowledge-view"></div>
+      </section>
+
+      <!-- 設定 -->
+      <section class="panel" data-panel="settings" hidden>
+        <div class="panel-head">
+          <h2>設定</h2>
+          <p class="lead-s">API キーは、このブラウザの中にだけ保存されます(各 AI 会社の API 以外へは送信しません)。<br />
+            キーがなくても、各画面の「APIキーなしで使う」から claude.ai や Gemini アプリにコピペして使えます。</p>
+        </div>
+        <div class="grid">
+          <label class="field"><span>Claude API キー</span><input id="s-claude-key" type="password" autocomplete="off" placeholder="sk-ant-..." /></label>
+          <label class="field"><span>Claude モデル</span><input id="s-claude-model" /></label>
+          <label class="field"><span>Claude の考える深さ</span>
+            <select id="s-claude-effort">
+              <option value="medium">medium(速い)</option>
+              <option value="high">high(おすすめ)</option>
+              <option value="xhigh">xhigh(じっくり)</option>
+              <option value="max">max(最大・時間がかかる)</option>
+            </select>
+          </label>
+          <label class="field"><span>Gemini API キー</span><input id="s-gemini-key" type="password" autocomplete="off" placeholder="AIza..." /></label>
+          <label class="field"><span>Gemini モデル</span><input id="s-gemini-model" /></label>
+        </div>
+        <label class="check"><input type="checkbox" id="s-auto-review" /> 1曲できたら、自動で1回推敲する(Claude。時間と料金は約2倍)</label>
+        <div class="actions">
+          <button class="primary" id="s-save">保存</button>
+          <button class="sub" id="s-clear">キーを削除</button>
+        </div>
+        <ul class="hint-list">
+          <li>Claude の API キー:<a href="https://platform.claude.com/" target="_blank" rel="noopener">Claude Console</a> で発行</li>
+          <li>Gemini の API キー:<a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a> で発行</li>
+          <li>モデル名は新しいものが出たら書き換えてください。</li>
+          <li>共用のパソコンでは、使い終わったら「キーを削除」を押してください。</li>
+        </ul>
+      </section>
+
+      <footer class="foot">
+        <p>Music Creator ・ 研究の出典は「ナレッジ」に記載 ・ 調査日 2026年11月24日</p>
+      </footer>
+    </main>
+  </div>
+
+  <button id="to-top" type="button" aria-label="ページの先頭へ" hidden>↑</button>
   <div id="toast" role="status" aria-live="polite"></div>
   <script src="dist/app.js"></script>
 </body>
