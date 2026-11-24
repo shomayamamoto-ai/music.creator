@@ -10,10 +10,14 @@ import {
   PROFILE_SCHEMA,
   FEEDBACK_SCHEMA,
   LYRIC_STYLE_SCHEMA,
+  LINE_SCHEMA,
+  STYLE_VARIANTS_SCHEMA,
+  PREFERENCE_SCHEMA,
 } from './schemas.js';
+import { analyzeLyrics } from './mora.js';
 import { LIMITS, lintSong, lintLyricsQuality, normalizeLyrics, normalizeStyle, toCopyBlock } from './suno.js';
 import { analyzeLocally, fileToBase64 } from './audio.js';
-import { aggregateStats } from './lyricstats.js';
+import { aggregateStats, lyricStats } from './lyricstats.js';
 import { KNOWLEDGE, CONFIDENCE_LABEL, CREATOR_RULES, SUNO_RIGHTS_NOTE } from './knowledge.js';
 
 const $ = (id) => document.getElementById(id);
@@ -58,6 +62,10 @@ const state = {
   lyricItems: store.get('lyrics', []),
   lyricStyle: store.get('lyricStyle', null),
   useLyricStyle: store.get('useLyricStyle', true),
+  preference: store.get('preference', null),
+  usePreference: store.get('usePreference', true),
+  variants: null,
+  selectedLine: null,
   hooks: null,
   lastComposeInput: null,
   lastFeedback: null,
@@ -245,6 +253,225 @@ function styleToText(st) {
 
 function applyLearnedStyle() {
   P.setLearnedStyle(state.useLyricStyle ? styleToText(state.lyricStyle) : '');
+}
+
+function preferenceToText(p) {
+  if (!p) return '';
+  return [
+    `要約:${p.summary}`,
+    `好まれる特徴:${(p.liked_patterns || []).join(' / ')}`,
+    `好まれない特徴:${(p.disliked_patterns || []).join(' / ')}`,
+    `音の好み:${p.style_preferences}`,
+    `歌詞の好み:${p.lyric_preferences}`,
+    `優先すること:${(p.do_list || []).join(' / ')}`,
+    `避けること:${(p.avoid_list || []).join(' / ')}`,
+  ].join('\n');
+}
+
+function applyPreference() {
+  P.setPreference(state.usePreference ? preferenceToText(state.preference) : '');
+}
+
+// ---------- 評価(★) ----------
+function ratedSongs() {
+  const seen = new Set();
+  return store
+    .get('history', [])
+    .filter((h) => h.rating)
+    .filter((h) => {
+      const key = `${h.songId}:${h.version}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 12);
+}
+
+function syncHistoryEntry(song) {
+  const history = store.get('history', []);
+  const i = history.findIndex((h) => h.createdAt === song.createdAt);
+  if (i >= 0) {
+    history[i] = { ...history[i], rating: song.rating, ratingNote: song.ratingNote, adoptedVariant: song.adoptedVariant };
+    store.set('history', history);
+  }
+}
+
+function setRating(n) {
+  if (!state.song) return;
+  saveEdits();
+  state.song.rating = n;
+  store.set('song', state.song);
+  syncHistoryEntry(state.song);
+  renderStars();
+  renderHistory();
+  renderPrefCount();
+  toast(`★${n} を付けました`);
+}
+
+function renderStars() {
+  const r = state.song?.rating || 0;
+  document.querySelectorAll('#o-rating [data-star]').forEach((b) => {
+    const on = Number(b.dataset.star) <= r;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-pressed', String(Number(b.dataset.star) === r));
+  });
+  $('o-rating-note').value = state.song?.ratingNote || '';
+}
+
+async function runPreference() {
+  const rated = ratedSongs();
+  if (rated.length < 3) {
+    setStatus('pref-status', `★を付けた曲が ${rated.length} 曲です。STEP 4 で3曲以上に★を付けてください。`, 'error');
+    return;
+  }
+  await withBusy('pref-status', `Gemini が ${rated.length} 曲の評価から好みを学習しています`, async (onProgress) => {
+    setPreferenceResult(await gemini(P.systemForPreference(), [{ text: P.userForPreference(rated, rated.map((r) => lyricStats(r.lyrics))) }], PREFERENCE_SCHEMA, onProgress));
+  });
+}
+
+function setPreferenceResult(p) {
+  state.preference = { ...p, learnedAt: new Date().toISOString(), basedOn: ratedSongs().length };
+  state.usePreference = true;
+  store.set('preference', state.preference);
+  store.set('usePreference', true);
+  applyPreference();
+  renderPreference();
+  updateChrome();
+}
+
+function renderPrefCount() {
+  const rated = ratedSongs();
+  const high = rated.filter((r) => r.rating >= 4).length;
+  const low = rated.filter((r) => r.rating <= 2).length;
+  $('pref-count').innerHTML = `★を付けた曲:<b>${rated.length}曲</b>(高評価 ${high}・低評価 ${low})`;
+}
+
+function renderPreference() {
+  renderPrefCount();
+  const p = state.preference;
+  if (!p) {
+    $('pref-result').innerHTML = '';
+    return;
+  }
+  $('pref-result').innerHTML = `
+    <div class="analysis">
+      <h3>学習した好み ${state.usePreference ? '<span class="agree yes">作詞と Style に反映中</span>' : '<span class="agree no">反映していません</span>'}</h3>
+      <p>${esc(p.summary)}</p>
+      <dl>
+        <dt>好まれる特徴</dt><dd>${(p.liked_patterns || []).map(esc).join('<br />')}</dd>
+        <dt>好まれない特徴</dt><dd>${(p.disliked_patterns || []).map(esc).join('<br />')}</dd>
+        <dt>音の好み</dt><dd>${esc(p.style_preferences)}</dd>
+        <dt>歌詞の好み</dt><dd>${esc(p.lyric_preferences)}</dd>
+        <dt>優先すること</dt><dd>${(p.do_list || []).map(esc).join('<br />')}</dd>
+        <dt>避けること</dt><dd>${(p.avoid_list || []).map(esc).join('<br />')}</dd>
+      </dl>
+      <p class="hint">${esc(p.confidence)}(${p.basedOn ?? '?'}曲の評価に基づく)</p>
+    </div>`;
+}
+
+// ---------- Style の3案比較 ----------
+async function runVariants() {
+  if (!state.song) return;
+  saveEdits();
+  await withBusy('v-status', 'Gemini が Style を3案作っています', async (onProgress) => {
+    showVariants(await gemini(P.systemForStyleVariants(), [{ text: P.userForStyleVariants(state.song, $('c-use-ref').checked ? referenceText() : '') }], STYLE_VARIANTS_SCHEMA, onProgress));
+  });
+}
+
+function showVariants(data) {
+  state.variants = data.variants || [];
+  $('variants-result').innerHTML = `
+    <p class="hint">3案をそれぞれ Suno で生成して聴き比べ、良かった案を「採用」してください。採用した案は好みの学習にも使われます。</p>
+    <div class="variants">${state.variants
+      .map(
+        (v, i) => `
+      <div class="variant ${state.song?.adoptedVariant === v.name ? 'adopted' : ''}">
+        <h4>${esc(v.name)}</h4>
+        <p>${esc(v.intent)}</p>
+        <div class="vstyle">${esc(v.style)}</div>
+        ${v.exclude_styles ? `<p class="listen">Exclude:${esc(v.exclude_styles)}</p>` : ''}
+        <p class="listen">聴き比べのポイント:${esc(v.listen_for)}</p>
+        <div class="row">
+          <button class="sub" data-variant-copy="${i}">Style をコピー</button>
+          <button class="primary ghost" data-variant-adopt="${i}">この案を採用</button>
+        </div>
+      </div>`,
+      )
+      .join('')}</div>`;
+}
+
+// ---------- 歌詞の分析ビューと1行の書き直し ----------
+function renderLyricView() {
+  if (!$('o-lyric-wrap').open) return;
+  const a = analyzeLyrics($('o-lyrics').value);
+  state.lyricAnalysis = a;
+  const label = { verse: 'Aメロ', pre: 'Bメロ', chorus: 'サビ', bridge: 'Cメロ' };
+  const summary = Object.entries(a.summary)
+    .filter(([k]) => label[k])
+    .map(([k, v]) => `<span>${label[k]} 平均 約${v}音/行</span>`)
+    .join('');
+  const verse = a.summary.verse;
+  const chorus = a.summary.chorus;
+  const densityNote =
+    verse && chorus
+      ? chorus < verse
+        ? '<span>サビはAメロより言葉が少なめ(覚えやすい形)</span>'
+        : '<span>サビの言葉がAメロ以上に多め。詰まりすぎていないか確認</span>'
+      : '';
+  let html = `<div class="lv-summary">${summary}${densityNote}${a.rhymeRate != null ? `<span>隣の行と語尾の母音が揃う割合 ${a.rhymeRate}%</span>` : ''}</div>
+    <p class="hint">行を押すと、その1行だけ AI が書き直し案を3つ出します(音数は元の行に近づけます)。漢字・英語を含む行の音数は概算です。</p>`;
+  let current = '';
+  for (const l of a.lines) {
+    if (l.section !== current) {
+      current = l.section;
+      html += `<p class="lv-sec">${esc(current)}</p>`;
+    }
+    const long = l.mora > 20;
+    html += `<button type="button" class="lv-line ${state.selectedLine === l.index ? 'sel' : ''}" data-line="${l.index}">
+        <span class="t">${esc(l.text)}</span>
+        <span class="lv-mora ${long ? 'long' : ''}">${l.approx ? '約' : ''}${l.mora}音</span>
+        <span class="lv-vowel ${l.vowel ? `v-${l.vowel}` : ''}">${l.vowel ? l.vowel.toUpperCase() : '–'}</span>
+      </button>`;
+    if (state.selectedLine === l.index) {
+      html += `<div class="lv-rewrite" id="lv-rewrite">
+          <label class="field"><span>どう直したいか(任意)</span><input id="lv-wish" placeholder="例:もっと具体的に/語尾を「い」で揃えたい" /></label>
+          <div class="actions"><button class="primary ghost" id="lv-go">この行の書き直し案を出す(Claude)</button></div>
+          <div id="lv-options"></div>
+        </div>`;
+    }
+  }
+  $('o-lyric-view').innerHTML = html || '<p class="hint">歌詞がありません。</p>';
+}
+
+async function runLineRewrite() {
+  const a = state.lyricAnalysis;
+  const line = a?.lines.find((l) => l.index === state.selectedLine);
+  if (!line) return;
+  saveEdits();
+  const wish = $('lv-wish').value.trim();
+  if (!settings().claudeKey) {
+    copyText(P.buildPastePrompt(P.systemForLineRewrite(), P.userForLineRewrite(state.song, line, wish), LINE_SCHEMA));
+    setStatus('lr-status', 'APIキーがないため、書き直し用のプロンプトをコピーしました。claude.ai に貼って、気に入った案を歌詞欄に直接貼ってください。', 'ok');
+    return;
+  }
+  await withBusy('lr-status', 'Claude が1行の書き直し案を考えています', async (onProgress) => {
+    const res = await claude(P.systemForLineRewrite(), P.userForLineRewrite(state.song, line, wish), LINE_SCHEMA, onProgress);
+    $('lv-options').innerHTML = (res.options || [])
+      .map((o) => `<button type="button" class="lv-opt" data-opt="${esc(o.text)}"><b>${esc(o.text)}</b><small>${esc(o.why)}</small></button>`)
+      .join('');
+  });
+}
+
+function replaceLine(index, text) {
+  const lines = $('o-lyrics').value.split('\n');
+  if (index < 0 || index >= lines.length) return;
+  lines[index] = text;
+  $('o-lyrics').value = lines.join('\n');
+  saveEdits();
+  updateCounts();
+  state.selectedLine = null;
+  renderLyricView();
+  toast('1行を差し替えました');
 }
 
 // ---------- STEP 2 量産・1曲・全自動 ----------
@@ -578,6 +805,19 @@ function pastePromptFor(kind) {
     }
     return P.buildPastePrompt(P.systemForLyricStyle(), P.userForLyricStyle(items, aggregateStats(items)), LYRIC_STYLE_SCHEMA);
   }
+  if (kind === 'variants') {
+    if (!state.song) return null;
+    saveEdits();
+    return P.buildPastePrompt(P.systemForStyleVariants(), P.userForStyleVariants(state.song, ''), STYLE_VARIANTS_SCHEMA);
+  }
+  if (kind === 'preference') {
+    const rated = ratedSongs();
+    if (rated.length < 3) {
+      setStatus('pref-status', `★を付けた曲が ${rated.length} 曲です。STEP 4 で3曲以上に★を付けてください。`, 'error');
+      return null;
+    }
+    return P.buildPastePrompt(P.systemForPreference(), P.userForPreference(rated, rated.map((r) => lyricStats(r.lyrics))), PREFERENCE_SCHEMA);
+  }
   if (kind === 'feedback') {
     if (!state.song) return null;
     saveEdits();
@@ -875,6 +1115,9 @@ function setSong(song, source, { revision = false } = {}) {
     version: revision && prev ? (prev.version || 1) + 1 : 1,
     createdAt: new Date().toISOString(),
   };
+  // 新しい版は未評価から始める
+  delete clean.rating;
+  delete clean.ratingNote;
   // 推敲以外の経路では古い採点表を持ち越さない
   if (!song.critique) {
     delete clean.critique;
@@ -916,7 +1159,11 @@ function renderSong() {
   $('o-exclude').value = s.exclude_styles || '';
   $('o-lyrics').value = s.lyrics;
   updateCounts();
+  renderStars();
   renderCritique(s);
+  state.selectedLine = null;
+  renderLyricView();
+  if (state.variants && $('variants-result').innerHTML) showVariants({ variants: state.variants });
   $('o-psych').innerHTML = (s.psychology_notes || [])
     .map((n) => `<div class="psych"><b>${esc(n.technique)}</b>${esc(n.where)}<small>${esc(n.why)}</small></div>`)
     .join('');
@@ -979,7 +1226,7 @@ function renderHistory() {
         .map(
           (h, i) => `
         <div class="history-item">
-          <div><b>${esc(h.title)}</b> <span class="version">v${h.version || 1}</span><small>${esc(new Date(h.createdAt).toLocaleString('ja-JP'))}・${esc(h.source)}</small></div>
+          <div><b>${esc(h.title)}</b> <span class="version">v${h.version || 1}</span>${h.rating ? ` <span class="stars-s">${'★'.repeat(h.rating)}</span>` : ''}<small>${esc(new Date(h.createdAt).toLocaleString('ja-JP'))}・${esc(h.source)}</small></div>
           <button class="sub" data-history="${i}">開く</button>
         </div>`,
         )
@@ -1061,6 +1308,8 @@ function bind() {
     profile: runProfile,
     learn: runLearn,
     feedback: runFeedback,
+    variants: runVariants,
+    preference: runPreference,
   };
   document.querySelectorAll('[data-run]').forEach((b) => b.addEventListener('click', () => runners[b.dataset.run]?.()));
 
@@ -1091,6 +1340,56 @@ function bind() {
   $('r-paste-load').onclick = () => loadPasted('r-paste', 'r-status', (data) => setSong(data, 'Claude 推敲(コピペ)', { revision: true }));
   $('f-paste-load').onclick = () => loadPasted('f-paste', 'f-status', showFeedback);
   $('a-local').onclick = runLocalOnly;
+  $('v-paste-load').onclick = () => loadPasted('v-paste', 'v-status', showVariants);
+  $('pref-paste-load').onclick = () => loadPasted('pref-paste', 'pref-status', setPreferenceResult);
+  $('pref-clear').onclick = () => {
+    state.usePreference = false;
+    store.set('usePreference', false);
+    applyPreference();
+    renderPreference();
+    toast('学習した好みを使わない設定にしました');
+  };
+
+  // 評価
+  $('o-rating').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-star]');
+    if (b) setRating(Number(b.dataset.star));
+  });
+  $('o-rating-note').addEventListener('input', () => {
+    if (!state.song) return;
+    state.song.ratingNote = $('o-rating-note').value;
+    store.set('song', state.song);
+    syncHistoryEntry(state.song);
+  });
+
+  // Style の3案
+  $('variants-result').addEventListener('click', (e) => {
+    const copy = e.target.closest('[data-variant-copy]');
+    const adopt = e.target.closest('[data-variant-adopt]');
+    if (copy) copyText(state.variants[Number(copy.dataset.variantCopy)].style);
+    if (adopt) {
+      const v = state.variants[Number(adopt.dataset.variantAdopt)];
+      saveEdits();
+      setSong({ ...state.song, style: v.style, exclude_styles: v.exclude_styles, adoptedVariant: v.name }, `Style 比較:${v.name}`, { revision: true });
+    }
+  });
+
+  // 歌詞の分析ビュー
+  $('o-lyric-wrap').addEventListener('toggle', renderLyricView);
+  $('o-lyric-view').addEventListener('click', (e) => {
+    const line = e.target.closest('[data-line]');
+    const opt = e.target.closest('[data-opt]');
+    if (e.target.closest('#lv-go')) {
+      runLineRewrite();
+    } else if (opt) {
+      replaceLine(state.selectedLine, opt.dataset.opt);
+    } else if (line) {
+      const idx = Number(line.dataset.line);
+      state.selectedLine = state.selectedLine === idx ? null : idx;
+      renderLyricView();
+      $('lv-wish')?.focus();
+    }
+  });
 
   $('hooks-result').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-expand]');
@@ -1174,6 +1473,10 @@ function bind() {
     $(id).addEventListener('input', () => {
       updateCounts();
       saveEdits();
+      if (id === 'o-lyrics') {
+        clearTimeout(renderLyricView.timer);
+        renderLyricView.timer = setTimeout(renderLyricView, 400);
+      }
     }),
   );
   document.querySelectorAll('[data-copy]').forEach((b) => b.addEventListener('click', () => copyText($(b.dataset.copy).value)));
@@ -1231,7 +1534,8 @@ function updateChrome() {
   $('key-state').innerHTML = `APIキー:Claude ${badge(!!s.claudeKey)} Gemini ${badge(!!s.geminiKey)}`;
   const refs = state.refs.length;
   const learned = state.lyricStyle && state.useLyricStyle;
-  $('nb-analyze').textContent = [refs ? `参考${refs}曲` : '', learned ? '書き方を学習済み' : ''].filter(Boolean).join('・') || 'Gemini・任意';
+  const pref = state.preference && state.usePreference;
+  $('nb-analyze').textContent = [refs ? `参考${refs}曲` : '', learned ? '書き方' : '', pref ? '好み' : ''].filter(Boolean).join('・') + (learned || pref ? 'を学習済み' : '') || 'Gemini・任意';
   $('nb-output').textContent = state.song ? `${state.song.title.slice(0, 10)} v${state.song.version || 1}` : '';
   const n = store.get('history', []).length;
   $('nb-history').textContent = n ? `${n}件` : '';
@@ -1260,6 +1564,7 @@ function init() {
     (s, i) => `<label><input type="checkbox" id="f-sym-${i}" value="${esc(s)}" /> ${esc(s)}</label>`,
   ).join('');
   applyLearnedStyle();
+  applyPreference();
   bind();
   restoreDrafts();
   loadSettingsForm();
@@ -1271,6 +1576,7 @@ function init() {
   renderProfile();
   renderLyricLibrary();
   renderLyricStyle();
+  renderPreference();
   updateChrome();
   switchTab(store.get('tab', 'compose'), { scroll: false });
 }

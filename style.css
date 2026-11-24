@@ -304,3 +304,44 @@ h3.result-head, #hooks-result h3, #changes-result h3, #feedback-result h3 { marg
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; }
 }
+
+/* ---- v3:評価・分析ビュー・Style 比較 ---- */
+.rating-box { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; margin: 12px 0; padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+.rating-label { font-size: 13px; font-weight: 700; color: var(--sub); }
+.stars { display: flex; }
+.stars button { width: 40px; height: 44px; border: 0; background: none; font-size: 26px; line-height: 1; color: var(--line); padding: 0; }
+.stars button.on { color: var(--gold); }
+.stars button:hover { color: var(--accent); }
+.rating-box input { flex: 1 1 220px; min-height: 40px; }
+.inline-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.inline-actions .sub { min-height: 40px; }
+.variants { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); gap: 12px; margin-top: 10px; }
+.variant { border: 1px solid var(--line); border-radius: 8px; padding: 12px; background: var(--bg); display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.variant.adopted { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.variant h4 { margin: 0; font-family: var(--f-serif); font-size: 15px; }
+.variant p { margin: 0; font-size: 13.5px; }
+.variant .vstyle { font-family: var(--f-en); font-size: 12.5px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 8px; white-space: pre-wrap; }
+.variant .listen { color: var(--sub); }
+.variant .row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; }
+.variant .row button { min-height: 40px; }
+details.lyric-view { margin-top: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); padding: 0 12px; }
+details.lyric-view > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; font-size: 13.5px; font-weight: 700; color: var(--sub); }
+details.lyric-view[open] { padding-bottom: 12px; }
+.lv-summary { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; font-size: 12.5px; }
+.lv-summary span { border: 1px solid var(--line); border-radius: 8px; padding: 1px 10px; background: var(--surface); }
+.lv-sec { margin: 10px 0 4px; font-family: var(--f-en); font-size: 12px; font-weight: 600; color: var(--accent); }
+.lv-line { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: center; width: 100%; text-align: left; font: inherit; font-size: 14px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; margin: 3px 0; min-height: 40px; cursor: pointer; }
+.lv-line:hover, .lv-line.sel { border-color: var(--accent); }
+.lv-line .t { min-width: 0; }
+.lv-mora { font-family: var(--f-en); font-size: 12px; color: var(--sub); white-space: nowrap; }
+.lv-mora.long { color: var(--warn); font-weight: 700; }
+.lv-vowel { font-family: var(--f-en); font-size: 12px; font-weight: 600; width: 1.8em; text-align: center; border-radius: 4px; padding: 1px 0; }
+.lv-vowel.v-a { background: #fbe0d8; color: #8a2f22; } .lv-vowel.v-i { background: #e3ecfb; color: #1f4a9a; }
+.lv-vowel.v-u { background: #e6f3e9; color: #1f6b3d; } .lv-vowel.v-e { background: #fdf0d2; color: #7a5600; }
+.lv-vowel.v-o { background: #efe3f6; color: #6a3590; } .lv-vowel.v-n { background: #ececec; color: #555; }
+.lv-rewrite { margin: 8px 0 12px; padding: 10px 12px; border: 1px dashed var(--accent); border-radius: 8px; background: var(--surface); }
+.lv-rewrite input { margin: 6px 0; }
+.lv-opt { display: flex; flex-direction: column; gap: 2px; width: 100%; text-align: left; font: inherit; font-size: 14px; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; margin: 6px 0 0; cursor: pointer; }
+.lv-opt:hover { border-color: var(--accent); }
+.lv-opt small { color: var(--sub); }
+.history-item .stars-s { color: var(--gold); font-size: 13px; letter-spacing: 1px; }

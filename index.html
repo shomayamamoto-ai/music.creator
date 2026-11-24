@@ -100,6 +100,25 @@
           <div id="profile-result"></div>
         </div>
 
+        <div class="sub-sec" id="prefs">
+          <h3>評価から好みを学習する</h3>
+          <p class="hint">STEP 4 で曲に★を付けておくと、高評価と低評価の曲を比べて「しょーまさんの好み」を学習し、
+            次の作詞と Style に反映します。★を付けた曲が3曲以上(高評価と低評価の両方があると精度が上がります)で使えます。</p>
+          <div id="pref-count" class="current-song"></div>
+          <div class="actions">
+            <button class="primary ghost" data-run="preference">評価から好みを学習</button>
+            <button class="sub" id="pref-clear">好みを使わない</button>
+            <button class="sub" data-copy-prompt="preference">キーなし:プロンプトをコピー</button>
+          </div>
+          <details class="paste">
+            <summary>APIキーなしで使う:返答を読み込む</summary>
+            <textarea id="pref-paste" rows="3"></textarea>
+            <button class="sub" id="pref-paste-load">読み込む</button>
+          </details>
+          <div id="pref-status" class="status" hidden></div>
+          <div id="pref-result"></div>
+        </div>
+
         <div class="sub-sec" id="learn">
           <h3>歌詞を学習させる</h3>
           <p class="hint">自分の過去の歌詞や手本にしたい歌詞を取り込むと、行の長さ・言葉の詰め方・繰り返し方・韻・人称などの
@@ -274,6 +293,13 @@
             </div>
             <button class="primary" id="o-copy-all">4欄まとめてコピー</button>
           </div>
+          <div class="rating-box">
+            <span class="rating-label">この曲の評価</span>
+            <div class="stars" id="o-rating" role="radiogroup" aria-label="評価(★1〜5)">
+              <button type="button" data-star="1" aria-label="★1">★</button><button type="button" data-star="2" aria-label="★2">★</button><button type="button" data-star="3" aria-label="★3">★</button><button type="button" data-star="4" aria-label="★4">★</button><button type="button" data-star="5" aria-label="★5">★</button>
+            </div>
+            <input id="o-rating-note" placeholder="Suno で聴いた感想メモ(例:サビ最高、Aメロが単調)" />
+          </div>
           <div id="o-pov" class="pov"></div>
           <div id="o-warnings"></div>
 
@@ -284,6 +310,17 @@
           <div class="copy-field">
             <div class="copy-head"><span>Style of Music</span><span class="count" id="o-style-count"></span><button data-copy="o-style">コピー</button></div>
             <textarea id="o-style" rows="4"></textarea>
+            <div class="inline-actions">
+              <button class="sub" data-run="variants">Style を3案出して聴き比べる(Gemini)</button>
+              <button class="sub" data-copy-prompt="variants">キーなし:プロンプトをコピー</button>
+            </div>
+            <details class="paste" id="v-paste-wrap">
+              <summary>APIキーなしで使う:返答を読み込む</summary>
+              <textarea id="v-paste" rows="3"></textarea>
+              <button class="sub" id="v-paste-load">読み込む</button>
+            </details>
+            <div id="v-status" class="status" hidden></div>
+            <div id="variants-result"></div>
           </div>
           <div class="copy-field">
             <div class="copy-head"><span>Exclude Styles</span><button data-copy="o-exclude">コピー</button></div>
@@ -292,6 +329,11 @@
           <div class="copy-field">
             <div class="copy-head"><span>Lyrics</span><span class="count" id="o-lyrics-count"></span><button data-copy="o-lyrics">コピー</button></div>
             <textarea id="o-lyrics" rows="22" class="lyrics"></textarea>
+            <details class="lyric-view" id="o-lyric-wrap">
+              <summary>歌詞の分析ビュー(行ごとの音数・語尾の母音・1行だけ書き直す)</summary>
+              <div id="o-lyric-view"></div>
+            </details>
+            <div id="lr-status" class="status" hidden></div>
           </div>
 
           <div class="next-box">

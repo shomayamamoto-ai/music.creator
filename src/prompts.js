@@ -64,9 +64,21 @@ export function setLearnedStyle(text) {
   learnedStyle = text || '';
 }
 
+// 評価から学習した好み(main.js から setPreference で渡される)
+let preference = '';
+export function setPreference(text) {
+  preference = text || '';
+}
+
 function learnedBlock() {
-  if (!learnedStyle) return '';
-  return `
+  const pref = preference
+    ? `
+# 評価から学習した作り手の好み(★の評価に基づく。優先して反映する)
+${preference}
+`
+    : '';
+  if (!learnedStyle) return pref;
+  return pref + `
 # 学習した作詞スタイル(ユーザーが取り込んだ歌詞から抽出。優先して従う)
 ${learnedStyle}
 - これは「書き方の傾向」の学習結果。元の歌詞のフレーズ・比喩・言い回しをそのまま使ってはいけない。
@@ -380,6 +392,100 @@ ${items.map((it, i) => `## 歌詞${i + 1}:${it.label}\n${it.lyrics}`).join('\n\n
 ${JSON.stringify(stats, null, 2)}
 
 書き方の傾向を抽出してください。`;
+}
+
+// ---------- 1行だけ書き直す(Claude) ----------
+export function systemForLineRewrite() {
+  return `${ROLE}
+
+# あなたの仕事
+曲の中の「1行だけ」を書き直す案を3つ出します。
+- 前後の行・セクションの役割・視点(語り手/相手/時点)・中心モチーフを守る。
+- 音数(モーラ数)は元の行に近づける(±2以内)。メロディに乗せ直さなくて済むように。
+- 3案は方向性を変える(例:より具体的に/より短く口ずさみやすく/語尾の母音を前後と揃える)。
+- 歌詞以外の説明やタグを text に入れない。
+
+${common()}`;
+}
+
+export function userForLineRewrite(song, lineInfo, wish) {
+  return `# 曲全体
+タイトル:${song.title}
+視点:${JSON.stringify(song.pov || {})}
+モチーフ:${(song.motifs || []).join('、') || '(未指定)'}
+${song.lyrics}
+
+# 書き直す行
+セクション:${lineInfo.section}
+行:${lineInfo.text}
+音数(目安):約${lineInfo.mora}音/語尾の母音:${lineInfo.vowel || '不明'}
+前の行:${lineInfo.prev || '(なし)'}
+次の行:${lineInfo.next || '(なし)'}
+
+# 作り手の希望
+${wish || '(特になし。より刺さる行にしてほしい)'}
+
+書き直し案を3つ出してください。`;
+}
+
+// ---------- Style を3案出す(Gemini) ----------
+export function systemForStyleVariants() {
+  return `あなたは、Suno の Style プロンプトを専門に設計する音楽プロデューサーです。
+同じ歌詞に対して、方向性の違う Style を3案作り、作り手が Suno で聴き比べて選べるようにします。
+
+# 3案の方向性(この順・この名前)
+1. 王道:ジャンルの定番どおり。外さない。
+2. 少し冒険:定番を土台に、1点だけ意外な要素(楽器・リズム・年代感・声質のどれか)を足す。
+3. 引き算:要素を最小限に絞り、声と言葉が一番届く形にする。
+
+# ルール
+- 歌詞の感情曲線・テンポ感・言葉の密度に合わせる。
+- 並び順は「ジャンル → ムード → ボーカル → 楽器 → リズム/BPM → 音作り」。ボーカル指定は前半に。
+- アーティスト名・曲名は入れない。矛盾するタグを入れない。
+- listen_for には、聴き比べで注目すべき具体的なポイント(例:サビ頭の声の張り、Aメロの隙間)を書く。
+
+${knowledgeForPrompt()}`;
+}
+
+export function userForStyleVariants(song, reference) {
+  return `# 歌詞
+タイトル:${song.title}
+${song.lyrics}
+
+# 現在の Style(参考)
+${song.style}
+${reference ? `\n# 参考にする楽曲要素\n${reference}` : ''}
+${preference ? `\n# 作り手の好み\n${preference}` : ''}
+
+3案を作ってください。`;
+}
+
+// ---------- 評価から好みを学習(Gemini) ----------
+export function systemForPreference() {
+  return `あなたは、音楽プロデューサーとして作り手の好みを分析します。
+作り手が★1〜5で評価した曲(歌詞・Style・メモ)を比べ、高評価と低評価を分ける特徴を抽出します。
+
+# ルール
+- 高評価(★4〜5)と低評価(★1〜2)の差に注目する。どちらかにしかない特徴を優先する。
+- 推測で断定しない。曲数が少ない場合は confidence に明記する。
+- テーマ(内容)より、書き方・構成・音の選び方の傾向を抽出する。`;
+}
+
+export function userForPreference(rated, stats) {
+  return `# 評価済みの曲(${rated.length}曲)
+${rated
+  .map(
+    (r, i) => `## 曲${i + 1}:★${r.rating} 「${r.title}」(v${r.version || 1})
+メモ:${r.ratingNote || '(なし)'}
+Style:${r.style}
+採用した Style 案:${r.adoptedVariant || '(なし)'}
+集計:${JSON.stringify(stats[i])}
+歌詞:
+${r.lyrics}`,
+  )
+  .join('\n\n')}
+
+高評価と低評価を分ける特徴を抽出してください。`;
 }
 
 // ---------- コピペモード用(APIキーなしで claude.ai / Gemini アプリに貼る) ----------

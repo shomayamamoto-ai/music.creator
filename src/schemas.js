@@ -171,3 +171,42 @@ export const LYRIC_STYLE_SCHEMA = obj({
   do_list: strArr('新しい歌詞で守るべき書き方(5〜8項目)'),
   dont_list: strArr('避けるべき書き方(3〜6項目)'),
 });
+
+// 1行だけの書き直し案
+export const LINE_SCHEMA = obj({
+  options: {
+    type: 'array',
+    description: '書き直し案を3つ。方向性を変える',
+    items: obj({
+      text: str('書き直した1行(歌詞のみ。タグや説明を含めない)'),
+      why: str('この案の狙い(短く)'),
+    }),
+  },
+});
+
+// 同じ歌詞に対する Style の3案
+export const STYLE_VARIANTS_SCHEMA = obj({
+  variants: {
+    type: 'array',
+    description: '王道・少し冒険・引き算 の3案をこの順で',
+    items: obj({
+      name: str('案の名前(王道/少し冒険/引き算)'),
+      intent: str('この案の狙い'),
+      style: str('Suno Style(英語・カンマ区切り・アーティスト名禁止・1000文字以内)'),
+      exclude_styles: str('Exclude Styles'),
+      listen_for: str('Suno で聴き比べるときに注目する点'),
+    }),
+  },
+});
+
+// 評価(★)から学習した好み
+export const PREFERENCE_SCHEMA = obj({
+  summary: str('この作り手の好みをひとことで'),
+  liked_patterns: strArr('高評価の曲に共通する特徴(歌詞・構成・音)'),
+  disliked_patterns: strArr('低評価の曲に共通する特徴'),
+  style_preferences: str('Style(音)の好みの傾向'),
+  lyric_preferences: str('歌詞の好みの傾向'),
+  do_list: strArr('次の曲で優先すること(5項目以内)'),
+  avoid_list: strArr('次の曲で避けること(5項目以内)'),
+  confidence: str('評価の数が少ない場合などの、確からしさの注意'),
+});
