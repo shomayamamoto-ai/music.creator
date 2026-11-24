@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 
 const content = readFileSync(new URL('../textbook/content.html', import.meta.url), 'utf8');
 const backLink =
-  '<p style="margin:0 0 8px"><a href="index.html">← Music Creator に戻る</a></p>';
+  '<p class="back-link" style="margin:0 0 8px"><a href="index.html">← Music Creator に戻る</a></p>';
 const html = `<!doctype html>
 <html lang="ja">
 <head>

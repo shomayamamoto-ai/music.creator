@@ -1761,6 +1761,65 @@ function bind() {
   toTop.onclick = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+// ---------- ツール / 教科書の切り替え ----------
+let pendingAnchor = null;
+let textbookReady = false;
+
+function setView(view, { anchor = null } = {}) {
+  const textbook = view === 'textbook';
+  $('tool-view').hidden = textbook;
+  $('textbook-view').hidden = !textbook;
+  document.querySelectorAll('[data-view]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.view === view)));
+  $('back-to-tool').hidden = !textbook;
+  // 共有・ブックマーク用にアドレスへ反映(ページは動かさない)
+  try {
+    history.replaceState(null, '', textbook ? '#textbook' : location.pathname + location.search);
+  } catch (_) {}
+  if (!textbook) {
+    window.scrollTo({ top: 0 });
+    return;
+  }
+  const frame = $('textbook-frame');
+  if (!frame.src) frame.src = 'textbook.html?embed=1';
+  if (anchor) {
+    if (textbookReady) gotoTextbook(anchor);
+    else pendingAnchor = anchor;
+  } else {
+    window.scrollTo({ top: 0 });
+  }
+}
+
+function gotoTextbook(anchor) {
+  $('textbook-frame').contentWindow?.postMessage({ source: 'mc-app', type: 'goto', anchor }, '*');
+}
+
+function bindViewSwitch() {
+  document.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => setView(b.dataset.view)));
+  $('back-to-tool').onclick = () => setView('tool');
+  document.addEventListener('click', (e) => {
+    const help = e.target.closest('[data-help]');
+    if (help) setView('textbook', { anchor: help.dataset.help });
+  });
+  const frame = $('textbook-frame');
+  frame.addEventListener('load', () => {
+    textbookReady = true;
+    if (pendingAnchor) {
+      // 高さが確定してから移動する
+      setTimeout(() => gotoTextbook(pendingAnchor), 150);
+      pendingAnchor = null;
+    }
+  });
+  window.addEventListener('message', (e) => {
+    const d = e.data;
+    if (!d || d.source !== 'mc-textbook') return;
+    if (d.type === 'height' && d.height > 0) frame.style.height = `${Math.ceil(d.height)}px`;
+    if (d.type === 'scrollTo') {
+      const top = frame.getBoundingClientRect().top + window.scrollY + d.top - 12;
+      window.scrollTo({ top, behavior: 'smooth' });
+    }
+  });
+}
+
 // ---------- 画面の付帯情報(キーの状態・手順タブのバッジ・注意書き) ----------
 function updateChrome() {
   const s = settings();
@@ -1800,6 +1859,7 @@ function init() {
   applyLearnedStyle();
   applyPreference();
   bind();
+  bindViewSwitch();
   restoreDrafts();
   loadSettingsForm();
   renderKnowledge();
@@ -1813,6 +1873,8 @@ function init() {
   renderPreference();
   updateChrome();
   switchTab(store.get('tab', 'compose'), { scroll: false });
+  // 基本はツール画面。アドレスが #textbook のときだけ教科書から開く
+  setView(location.hash === '#textbook' ? 'textbook' : 'tool');
 }
 
 init();

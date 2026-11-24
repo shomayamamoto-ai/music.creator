@@ -160,6 +160,8 @@ footer { border-top: 1px solid var(--gold) !important; }
   .step-no span { display: inline; font-size: 24px; }
 }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+.embedded .back-link { display: none; }
+.embedded .page { padding-top: 24px; }
 </style>
 
 <div class="page">
@@ -672,6 +674,29 @@ piano, clean electric guitar, live drums, 82 BPM, wide stereo, warm mix</pre>
 </div>
 
 <script>
+// アプリの中に埋め込まれたとき(?embed=1)の動き:高さを親に伝え、目次のリンクは親のスクロールで移動する
+(function () {
+  if (!/[?&]embed=1/.test(location.search) || window.parent === window) return;
+  document.documentElement.classList.add('embedded');
+  function post(msg) { window.parent.postMessage(Object.assign({ source: 'mc-textbook' }, msg), '*'); }
+  function sendHeight() { post({ type: 'height', height: document.documentElement.scrollHeight }); }
+  function goTo(id) {
+    var el = document.getElementById(id);
+    if (el) post({ type: 'scrollTo', top: el.getBoundingClientRect().top + window.scrollY });
+  }
+  window.addEventListener('load', sendHeight);
+  if (window.ResizeObserver) new ResizeObserver(sendHeight).observe(document.body);
+  sendHeight();
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest && e.target.closest('a[href^="#"]');
+    if (!a) return;
+    e.preventDefault();
+    goTo(a.getAttribute('href').slice(1));
+  });
+  window.addEventListener('message', function (e) {
+    if (e.data && e.data.source === 'mc-app' && e.data.type === 'goto') goTo(e.data.anchor);
+  });
+})();
 (function () {
   var boxes = Array.prototype.slice.call(document.querySelectorAll('#checklist-items input'));
   var key = 'mc-textbook-checklist';

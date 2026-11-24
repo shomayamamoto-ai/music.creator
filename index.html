@@ -19,13 +19,20 @@
         <p class="lead">Claude が書き、Gemini が磨き、Suno が鳴らす。<br />音楽心理学の知見をもとに、Suno にそのまま貼れる形で仕上げます。</p>
       </div>
       <div class="top-links">
-        <a class="pill-link" href="textbook.html">使い方の教科書</a>
+        <div class="view-switch" role="tablist" aria-label="表示の切り替え">
+          <button type="button" role="tab" data-view="tool" aria-selected="true">ツール</button>
+          <button type="button" role="tab" data-view="textbook" aria-selected="false">教科書</button>
+        </div>
         <span id="key-state" class="key-state"></span>
       </div>
     </div>
   </header>
 
-  <div class="shell">
+  <div id="textbook-view" class="textbook-view" hidden>
+    <iframe id="textbook-frame" title="AI作曲の教科書" loading="lazy"></iframe>
+  </div>
+
+  <div class="shell" id="tool-view">
     <nav class="side" aria-label="制作の手順">
       <p class="side-head">制作の流れ</p>
       <div class="tabs" role="tablist">
@@ -48,7 +55,7 @@
       <!-- 1 参考曲・歌詞の学習(Gemini) -->
       <section class="panel" data-panel="analyze" hidden>
         <div class="panel-head">
-          <p class="step-label">STEP 1 <span class="badge gemini">Gemini</span><span class="optional">任意</span></p>
+          <p class="step-label">STEP 1 <span class="badge gemini">Gemini</span><span class="optional">任意</span><button type="button" class="help-link" data-help="step4">この手順の説明</button></p>
           <h2>参考曲・歌詞の学習</h2>
           <p class="lead-s">好きな曲と歌詞から「定番」と「書き方の傾向」を学ばせます。<br />ここで学習した内容は、STEP 2〜5 の作詞と推敲に反映されます。</p>
         </div>
@@ -153,7 +160,7 @@
       <!-- 2 メッセージから作る(Claude) -->
       <section class="panel" data-panel="compose">
         <div class="panel-head">
-          <p class="step-label">STEP 2 <span class="badge claude">Claude</span></p>
+          <p class="step-label">STEP 2 <span class="badge claude">Claude</span><button type="button" class="help-link" data-help="step5">この手順の説明</button></p>
           <h2>メッセージから作る</h2>
           <p class="lead-s">伝えたいことを書くだけで、歌詞と Suno 用の Style を作ります。</p>
         </div>
@@ -239,7 +246,7 @@
       <!-- 3 歌詞を補強(Gemini) -->
       <section class="panel" data-panel="enhance" hidden>
         <div class="panel-head">
-          <p class="step-label">STEP 3 <span class="badge gemini">Gemini</span></p>
+          <p class="step-label">STEP 3 <span class="badge gemini">Gemini</span><button type="button" class="help-link" data-help="step6">この手順の説明</button></p>
           <h2>歌詞を補強</h2>
           <p class="lead-s">できている歌詞を磨き、Suno 用の Style プロンプトを作ります。<br />視点のブレや、テーマ用語の詰め込みも直します。</p>
         </div>
@@ -280,7 +287,7 @@
       <!-- 4 Suno に貼る -->
       <section class="panel" data-panel="output" hidden>
         <div class="panel-head">
-          <p class="step-label">STEP 4</p>
+          <p class="step-label">STEP 4<button type="button" class="help-link" data-help="step7">この手順の説明</button></p>
           <h2>Suno に貼る</h2>
           <p class="lead-s">Suno の「Custom」モードの各欄に、そのままコピーして貼ってください。ここで直接書き換えることもできます。<br />
             商用で使う曲は、Suno の有料プランに加入している期間に生成してください。</p>
@@ -381,7 +388,7 @@
       <!-- 5 聴いて直す(Gemini) -->
       <section class="panel" data-panel="feedback" hidden>
         <div class="panel-head">
-          <p class="step-label">STEP 5 <span class="badge gemini">Gemini</span></p>
+          <p class="step-label">STEP 5 <span class="badge gemini">Gemini</span><button type="button" class="help-link" data-help="step8">この手順の説明</button></p>
           <h2>聴いて直す</h2>
           <p class="lead-s">Suno で生成した曲の感想を入れると、原因を突き止めて、次に貼る修正版を作ります。<br />生成した曲の音声を渡すと、Gemini が実際に聴いて判断します。</p>
         </div>
@@ -411,7 +418,7 @@
       <!-- 6 公開の準備(Claude) -->
       <section class="panel" data-panel="release" hidden>
         <div class="panel-head">
-          <p class="step-label">STEP 6 <span class="badge claude">Claude</span><span class="optional">任意</span></p>
+          <p class="step-label">STEP 6 <span class="badge claude">Claude</span><span class="optional">任意</span><button type="button" class="help-link" data-help="release">この手順の説明</button></p>
           <h2>公開の準備</h2>
           <p class="lead-s">完成した曲から、配信用の紹介文・SNS 投稿文・ハッシュタグ・ジャケット画像のプロンプトを作ります。</p>
         </div>
@@ -515,6 +522,7 @@
   </div>
 
   <button id="to-top" type="button" aria-label="ページの先頭へ" hidden>↑</button>
+  <button id="back-to-tool" type="button" hidden>← ツールに戻る</button>
   <div id="toast" role="status" aria-live="polite"></div>
   <script src="dist/app.js"></script>
 </body>
