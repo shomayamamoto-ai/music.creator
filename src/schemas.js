@@ -234,3 +234,26 @@ export const RELEASE_SCHEMA = obj({
   thumbnail_text: str('サムネイルに大きく載せる短い文字(10字以内)'),
   checklist: strArr('公開前に確認すべきこと(権利・クレジット表記など)'),
 });
+
+// プロジェクト(アルバム)全体の設計
+export const ALBUM_SCHEMA = obj({
+  concept: str('アルバム全体を貫くコンセプト(1〜2文)'),
+  title_ideas: strArr('アルバムタイトル案(3つ)'),
+  order: {
+    type: 'array',
+    description: 'おすすめの曲順(渡された全曲を1回ずつ)',
+    items: obj({
+      title: str('曲名(渡された曲名そのまま)'),
+      role: str('アルバムの中での役割(例:1曲目のつかみ、中盤の休憩、ラストの解放)'),
+      reason: str('この位置に置く理由(テンポ・キー感・感情の流れ)'),
+    }),
+  },
+  balance: strArr('全体の偏り(テンポ・ムード・テーマ・視点・モチーフ)の指摘'),
+  overlaps: {
+    type: 'array',
+    description: '曲どうしで似すぎている所',
+    items: obj({ songs: str('対象の曲名'), issue: str('何が似ているか'), fix: str('どう差別化するか') }),
+  },
+  unified_style: str('アルバム全体の統一感を出すために、各曲の Style に共通して足すタグ(英語・カンマ区切り・アーティスト名禁止)'),
+  missing_song: str('アルバムに足りない曲の提案(どんなテーマ・テンポ・役割の曲か)'),
+});

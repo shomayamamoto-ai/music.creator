@@ -14,6 +14,7 @@ import {
   STYLE_VARIANTS_SCHEMA,
   PREFERENCE_SCHEMA,
   RELEASE_SCHEMA,
+  ALBUM_SCHEMA,
 } from './schemas.js';
 import { analyzeLyrics } from './mora.js';
 import { LIMITS, lintSong, lintLyricsQuality, normalizeLyrics, normalizeStyle, toCopyBlock, CLICHES } from './suno.js';
@@ -23,6 +24,7 @@ import { KNOWLEDGE, CONFIDENCE_LABEL, CREATOR_RULES, SUNO_RIGHTS_NOTE, SUNO_FACT
 import { GENRES, genreById, genreToText } from './genres.js';
 import { SAMPLE_SONG } from './sample.js';
 import { DAWS, SUNO_EXPORT_FACTS, dawById, dawToText } from './daw.js';
+import { parseBpm, sectionPlan, totalLength, fmtTime } from './timing.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) =>
@@ -372,7 +374,8 @@ function ratedSongs() {
       seen.add(key);
       return true;
     })
-    .slice(0, 12);
+    .slice(0, 12)
+    .map((h) => ({ ...h, friends: songFriendsSummary(h.songId) }));
 }
 
 function syncHistoryEntry(song) {
@@ -1005,6 +1008,15 @@ function pastePromptFor(kind) {
     }
     return P.buildPastePrompt(P.systemForLyricStyle(), P.userForLyricStyle(items, aggregateStats(items)), LYRIC_STYLE_SCHEMA);
   }
+  if (kind === 'album') {
+    const project = $('al-project').value;
+    const songs = project ? albumSongs(project) : [];
+    if (songs.length < 2) {
+      setStatus('al-status', 'このプロジェクトの曲が2曲以上必要です。', 'error');
+      return null;
+    }
+    return P.buildPastePrompt(P.systemForAlbum(), P.userForAlbum(project, songs), ALBUM_SCHEMA);
+  }
   if (kind === 'release') {
     if (!state.song) return null;
     saveEdits();
@@ -1067,7 +1079,9 @@ function showHooks(result) {
     <h3>Aメロ+サビの候補(${sorted.length}案・スコア順)</h3>
     <p class="meta">核:${esc(result.core_message)}</p>
     <div class="cards">${cards.join('')}</div>
-    <div class="recommend"><b>おすすめ:</b>${esc(result.recommendation)}</div>`;
+    <div class="recommend"><b>おすすめ:</b>${esc(result.recommendation)}</div>
+    <div class="actions hooks-share"><button type="button" class="primary ghost" id="hooks-share">この候補を友達に聞く(共有リンク)</button></div>`;
+  $('hooks-share').onclick = () => openShare('hooks');
 }
 
 function showChanges(changes) {
@@ -1411,6 +1425,9 @@ function renderSong() {
   renderCritique(s);
   state.selectedLine = null;
   renderLyricView();
+  stopRhythm();
+  $('t-bpm').value = '';
+  renderTiming();
   if (state.variants && $('variants-result').innerHTML) showVariants({ variants: state.variants });
   $('o-psych').innerHTML = (s.psychology_notes || [])
     .map((n) => `<div class="psych"><b>${esc(n.technique)}</b>${esc(n.where)}<small>${esc(n.why)}</small></div>`)
@@ -1477,6 +1494,12 @@ function projectsOf(history) {
 
 function renderHistory() {
   const history = store.get('history', []);
+  try {
+    renderAlbumProjects();
+    renderVotes();
+  } catch (err) {
+    console.error(err);
+  }
   // プロジェクトの候補(入力補完と絞り込み)
   const projects = projectsOf(history);
   $('project-list').innerHTML = projects.map((p) => `<option value="${esc(p)}"></option>`).join('');
@@ -1583,7 +1606,7 @@ function showDiff(newKey, oldKey) {
 }
 
 // ---------- バックアップ ----------
-const BACKUP_KEYS = ['song', 'history', 'analysis', 'refs', 'profile', 'lyrics', 'lyricStyle', 'useLyricStyle', 'preference', 'usePreference', 'drafts'];
+const BACKUP_KEYS = ['song', 'history', 'analysis', 'refs', 'profile', 'lyrics', 'lyricStyle', 'useLyricStyle', 'preference', 'usePreference', 'drafts', 'shares', 'votes'];
 
 function exportBackup() {
   const data = {};
@@ -1632,6 +1655,20 @@ function sanitizeBackup(data) {
   if (obj(data.preference)) out.preference = { ...data.preference, basedOn: int(data.preference.basedOn) };
   if (typeof data.useLyricStyle === 'boolean') out.useLyricStyle = data.useLyricStyle;
   if (typeof data.usePreference === 'boolean') out.usePreference = data.usePreference;
+  if (obj(data.shares)) {
+    out.shares = Object.fromEntries(
+      Object.entries(data.shares)
+        .filter(([id, v]) => SAFE_ID.test(id) && obj(v))
+        .map(([id, v]) => [id, { kind: v.kind === 'hooks' ? 'hooks' : 'song', title: strv(v.title), songId: strv(v.songId), version: int(v.version, 1), createdAt: strv(v.createdAt), labels: arr(v.labels).map(strv), items: arr(v.items).filter(obj).map((it) => ({ label: strv(it.label), text: strv(it.text) })) }]),
+    );
+  }
+  if (obj(data.votes)) {
+    out.votes = Object.fromEntries(
+      Object.entries(data.votes)
+        .filter(([id, v]) => SAFE_ID.test(id) && Array.isArray(v))
+        .map(([id, v]) => [id, v.filter(obj).map((x) => ({ code: strv(x.code), pick: x.pick == null ? null : int(x.pick, 0, 0, 19), rating: x.rating == null ? null : int(x.rating, 0, 1, 5), stick: strv(x.stick), comment: strv(x.comment), name: strv(x.name) }))]),
+    );
+  }
   if (obj(data.drafts)) out.drafts = Object.fromEntries(Object.entries(data.drafts).filter(([, v]) => typeof v === 'string'));
   return out;
 }
@@ -1843,6 +1880,7 @@ function bind() {
     feedback: runFeedback,
     variants: runVariants,
     release: runRelease,
+    album: runAlbum,
     preference: runPreference,
   };
   document.querySelectorAll('[data-run]').forEach((b) => b.addEventListener('click', () => runners[b.dataset.run]?.()));
@@ -2048,7 +2086,10 @@ function bind() {
       }
       if (id === 'o-lyrics') {
         clearTimeout(renderLyricView.timer);
-        renderLyricView.timer = setTimeout(renderLyricView, 400);
+        renderLyricView.timer = setTimeout(() => {
+          renderLyricView();
+          renderTiming();
+        }, 400);
       }
     }),
   );
@@ -2060,6 +2101,35 @@ function bind() {
     $('e-message').value = state.song?.core_message || '';
     switchTab('enhance');
   };
+  $('timing-wrap').addEventListener('toggle', () => {
+    if (!$('timing-wrap').open) stopRhythm();
+    renderTiming();
+  });
+  $('t-bpm').addEventListener('change', () => {
+    if (state.song) store.set(`bpm:${state.song.songId}`, int($('t-bpm').value, 100, 40, 240));
+    renderTiming();
+  });
+  $('t-bpl').addEventListener('change', renderTiming);
+  document.querySelectorAll('[data-tview]').forEach((b) =>
+    b.addEventListener('click', () => {
+      document.querySelectorAll('[data-tview]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+      $('t-sheet').hidden = b.dataset.tview !== 'sheet';
+      $('t-rhythm').hidden = b.dataset.tview !== 'rhythm';
+      if (b.dataset.tview !== 'rhythm') stopRhythm();
+    }),
+  );
+  $('t-sheet').addEventListener('click', (e) => {
+    if (e.target.closest('#t-copy')) copyText(timingText());
+    if (e.target.closest('#t-csv')) copyText(timingText(true));
+  });
+  $('t-play').onclick = playRhythm;
+  $('t-stop').onclick = stopRhythm;
+  $('o-share').onclick = () => openShare('song');
+  $('share-copy').onclick = () => copyText($('share-dialog').dataset.url || '');
+  $('share-native').onclick = () => navigator.share?.({ title: 'Music Creator', url: $('share-dialog').dataset.url }).catch(() => {});
+  $('share-close').onclick = () => $('share-dialog').close();
+  $('vote-load').onclick = loadVoteCodes;
+  $('al-paste-load').onclick = () => loadPasted('al-paste', 'al-status', (d) => showAlbum(d, $('al-project').value));
   $('o-undo').onclick = undoEdit;
   $('o-redo').onclick = redoEdit;
   $('o-to-feedback').onclick = () => {
@@ -2193,6 +2263,366 @@ function renderDawGuide() {
   $('daw-facts').innerHTML = `<h3 class="kb-area">DAW(GarageBand / Logic Pro)の情報(2026年11月時点)</h3>
     ${SUNO_EXPORT_FACTS.map(factHtml).join('')}
     ${DAWS.flatMap((d) => d.facts.map((f) => ({ ...f, text: `${d.name}:${f.text}` }))).map(factHtml).join('')}`;
+}
+
+// ---------- テンポと構成:DAW作業表・リズム確認 ----------
+const FIT_LABEL = { ok: 'ちょうど', tight: '詰まり気味', loose: '間延び気味', adlib: '合いの手' };
+
+// セクションごとの DAW 作業のヒント(DAW を選んでいるときだけ、その DAW の機能に合わせる)
+function dawTip(kind, daw) {
+  const logic = daw === 'logic';
+  const gb = daw === 'garageband';
+  const tips = {
+    intro: '長ければカット。最初の5秒で何か起きるように' + (logic || gb ? '(リージョンの頭を切る)' : ''),
+    verse: '声が埋もれていないか確認' + (logic ? '(Stem Splitter で声だけ出して音量を整える)' : gb ? '(トラックの音量を調整)' : ''),
+    pre: 'サビ前の溜め。音を少し引いて期待を作る',
+    chorus: 'ここが一番大きく聞こえるように' + (logic ? '(ハモリ・ダブリングを重ねる候補)' : gb ? '(自分の声でハモリを録音して重ねる候補)' : ''),
+    bridge: '一度引く。楽器を減らして、ラストサビとの差を作る',
+    inst: '長すぎないか確認。必要なら短く',
+    outro: '終わり方が不自然なら、フェードアウトかカット' + (logic ? '(最後に Mastering Assistant)' : ''),
+    other: '役割を確認',
+  };
+  return tips[kind] || tips.other;
+}
+
+function timingInputs() {
+  const s = state.song || {};
+  const auto = parseBpm(s.style, genreById(store.get('genre', ''))?.tempo);
+  const saved = store.get(`bpm:${s.songId}`, null);
+  const bpm = int($('t-bpm').value || saved || auto || 100, 100, 40, 240);
+  const bpl = int($('t-bpl').value, 2, 1, 4);
+  return { bpm, bpl, auto };
+}
+
+function renderTiming() {
+  if (!$('timing-wrap').open || !state.song) return;
+  const { bpm, bpl, auto } = timingInputs();
+  if (!$('t-bpm').value) $('t-bpm').value = bpm;
+  const plan = sectionPlan($('o-lyrics').value, { bpm, barsPerLine: bpl });
+  state.timingPlan = { plan, bpm, bpl };
+  $('t-note').textContent =
+    `${auto ? `Style から読み取ったテンポは ${auto} BPM です。` : 'Style にテンポの指定がないため、目安を入れています。'}` +
+    `4/4拍子・1行=${bpl}小節として計算した目安で、全体は約 ${fmtTime(totalLength(plan))}。Suno の生成結果は小節数が前後するので、実際の音に合わせて調整してください。`;
+  const daw = settings().daw;
+  const rows = plan
+    .map(
+      (s) => `<tr><td><b>${esc(s.name)}</b>${s.note ? `<br /><small>${esc(s.note)}</small>` : ''}</td>
+        <td class="num">${s.startBar}小節目</td><td class="num">${fmtTime(s.startSec)}</td><td class="num">${s.lengthBars}小節</td>
+        <td>${esc(dawTip(s.kind, daw))}</td></tr>`,
+    )
+    .join('');
+  $('t-sheet').innerHTML = `
+    <div class="table-scroll"><table class="sheet-table">
+      <thead><tr><th>セクション</th><th>開始</th><th>時間</th><th>長さ</th><th>作業のヒント${daw ? `(${esc(dawById(daw)?.name || '')})` : ''}</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>
+    <div class="actions"><button type="button" class="sub" id="t-copy">作業表をテキストでコピー</button>
+      <button type="button" class="sub" id="t-csv">表計算用(CSV)でコピー</button></div>`;
+  let current = '';
+  $('t-lines').innerHTML = plan
+    .flatMap((s) => {
+      const head = s.name !== current ? [`<p class="t-sec">${esc(s.name)}・${s.startBar}小節目〜</p>`] : [];
+      current = s.name;
+      return head.concat(
+        s.lines.map(
+          (l, i) => `<div class="t-line" data-tl="${s.startBar}-${i}" data-sec="${l.startSec}">
+            <span class="tm">${fmtTime(l.startSec)}</span><span>${esc(l.text)}</span>
+            <span class="t-fit ${l.fit}" title="約${l.mora}音/枠${8 * bpl}">${FIT_LABEL[l.fit]}・${l.approx ? '約' : ''}${l.mora}音</span></div>`,
+        ),
+      );
+    })
+    .join('');
+}
+
+function timingText(csv = false) {
+  const t = state.timingPlan;
+  if (!t) return '';
+  if (csv) {
+    const q = (v) => `"${String(v).replace(/"/g, '""')}"`;
+    return ['セクション,開始小節,開始時間,小節数,メモ', ...t.plan.map((s) => [s.name, s.startBar, fmtTime(s.startSec), s.lengthBars, s.note].map(q).join(','))].join('\n');
+  }
+  return [
+    `「${state.song?.title || ''}」 ${t.bpm} BPM・4/4拍子・1行=${t.bpl}小節(目安)`,
+    ...t.plan.map((s) => `${fmtTime(s.startSec)}  ${String(s.startBar).padStart(3)}小節目  ${s.name}(${s.lengthBars}小節)${s.note ? ` ${s.note}` : ''}`),
+  ].join('\n');
+}
+
+// ---- リズム確認の再生 ----
+const rhythm = { ctx: null, timer: null, start: 0, beat: 0, playing: false };
+
+function click(ctx, when, accent) {
+  const o = ctx.createOscillator();
+  const g = ctx.createGain();
+  o.frequency.value = accent ? 1500 : 1000;
+  g.gain.setValueAtTime(0.0001, when);
+  g.gain.exponentialRampToValueAtTime(accent ? 0.5 : 0.25, when + 0.002);
+  g.gain.exponentialRampToValueAtTime(0.0001, when + 0.06);
+  o.connect(g).connect(ctx.destination);
+  o.start(when);
+  o.stop(when + 0.08);
+}
+
+function stopRhythm() {
+  rhythm.playing = false;
+  clearInterval(rhythm.timer);
+  try {
+    window.speechSynthesis?.cancel();
+  } catch (_) {}
+  rhythm.ctx?.close?.();
+  rhythm.ctx = null;
+  document.querySelectorAll('.t-line.now').forEach((x) => x.classList.remove('now'));
+  $('t-play').disabled = false;
+  $('t-stop').disabled = true;
+}
+
+function playRhythm() {
+  renderTiming();
+  const t = state.timingPlan;
+  if (!t) return;
+  stopRhythm();
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  rhythm.ctx = Ctx ? new Ctx() : null;
+  rhythm.playing = true;
+  $('t-play').disabled = true;
+  $('t-stop').disabled = false;
+  const spb = 60 / t.bpm;
+  const lines = [...document.querySelectorAll('#t-lines .t-line')].map((el) => ({ el, sec: Number(el.dataset.sec), text: el.children[1].textContent }));
+  const end = totalLength(t.plan);
+  const startAt = (rhythm.ctx?.currentTime ?? 0) + 0.15;
+  const t0 = performance.now() + 150;
+  let nextBeat = 0;
+  let nextLine = 0;
+  const speak = $('t-speak').checked && 'speechSynthesis' in window;
+  rhythm.timer = setInterval(() => {
+    const now = (performance.now() - t0) / 1000;
+    // 少し先までのクリックを予約する
+    while (rhythm.ctx && nextBeat * spb < now + 0.3 && nextBeat * spb < end) {
+      click(rhythm.ctx, startAt + nextBeat * spb, nextBeat % 4 === 0);
+      nextBeat += 1;
+    }
+    while (nextLine < lines.length && lines[nextLine].sec <= now) {
+      document.querySelectorAll('.t-line.now').forEach((x) => x.classList.remove('now'));
+      const l = lines[nextLine];
+      l.el.classList.add('now');
+      l.el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      if (speak) {
+        try {
+          const u = new SpeechSynthesisUtterance(l.text.replace(/[((][^))]*[))]/g, ''));
+          u.lang = 'ja-JP';
+          u.rate = 1.1;
+          window.speechSynthesis.cancel();
+          window.speechSynthesis.speak(u);
+        } catch (_) {}
+      }
+      nextLine += 1;
+    }
+    if (now > end + 0.5) stopRhythm();
+  }, 25);
+}
+
+// ---------- 友達に感想を聞く(共有リンクと回答コード) ----------
+function bytesToB64url(bytes) {
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function b64urlToBytes(str) {
+  let t = str.replace(/-/g, '+').replace(/_/g, '/');
+  while (t.length % 4) t += '=';
+  const bin = atob(t);
+  return Uint8Array.from(bin, (c) => c.charCodeAt(0));
+}
+
+async function encodeShare(obj) {
+  const bytes = new TextEncoder().encode(JSON.stringify(obj));
+  if ('CompressionStream' in window) {
+    const stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream('deflate-raw'));
+    return `z=${bytesToB64url(new Uint8Array(await new Response(stream).arrayBuffer()))}`;
+  }
+  return `j=${bytesToB64url(bytes)}`;
+}
+
+function voteUrl(hash) {
+  const base = location.href.split('#')[0].split('?')[0].replace(/[^/]*$/, '');
+  return `${base}vote.html#${hash}`;
+}
+
+async function openShare(kind) {
+  let payload;
+  if (kind === 'hooks') {
+    const sorted = state.hooks?.sorted || [];
+    if (!sorted.length) return;
+    payload = {
+      v: 1,
+      kind: 'hooks',
+      id: uid(),
+      title: `サビの候補:${strv(state.hooks.core_message).slice(0, 40)}`,
+      items: sorted.slice(0, 10).map((c, i) => ({ label: `${String.fromCharCode(65 + i)}案`, text: `${strv(c.verse)}\n\n${strv(c.chorus)}` })),
+    };
+    state.shares = { ...store.get('shares', {}), [payload.id]: { kind: 'hooks', title: payload.title, items: payload.items, labels: sorted.slice(0, 10).map((c) => strv(c.label)), createdAt: new Date().toISOString() } };
+  } else {
+    if (!state.song) return;
+    saveEdits();
+    payload = { v: 1, kind: 'song', id: uid(), title: `新曲「${strv(state.song.title)}」の感想を聞かせてください`, items: [{ label: strv(state.song.title), text: strv(state.song.lyrics).replace(/^\s*\[[^\]]*\]\s*$/gm, '').replace(/\n{3,}/g, '\n\n').trim() }] };
+    state.shares = { ...store.get('shares', {}), [payload.id]: { kind: 'song', title: strv(state.song.title), songId: state.song.songId, version: state.song.version, createdAt: new Date().toISOString() } };
+  }
+  store.set('shares', state.shares);
+  const url = voteUrl(await encodeShare(payload));
+  $('share-desc').textContent =
+    kind === 'hooks' ? 'サビの候補(上位10案まで)を友達に見せて、一番いい案に投票してもらいます。' : 'この曲の歌詞を友達に見せて、★と感想をもらいます。Suno で作った音源は、別に送ってください。';
+  $('share-link').textContent = url;
+  const local = location.protocol === 'file:';
+  $('share-warn').hidden = !local && url.length < 7000;
+  $('share-warn').textContent = local
+    ? 'いまはファイルを直接開いているため、このリンクは友達の端末では開けません。ネットに公開した Music Creator から作ってください。'
+    : 'リンクがとても長くなりました。届かない場合は、案の数を減らしてください。';
+  $('share-native').hidden = !navigator.share;
+  $('share-dialog').dataset.url = url;
+  $('share-dialog').showModal();
+}
+
+// 回答コードを読み込み、共有ごとに集計する
+function loadVoteCodes() {
+  const codes = $('vote-codes').value.match(/MCV1\.[A-Za-z0-9_-]+/g) || [];
+  if (!codes.length) {
+    setStatus('vote-status', '回答コード(MCV1. で始まる文字)が見つかりませんでした。', 'error');
+    return;
+  }
+  const shares = store.get('shares', {});
+  const votes = store.get('votes', {});
+  let added = 0;
+  let unknown = 0;
+  for (const code of codes) {
+    try {
+      const a = JSON.parse(new TextDecoder().decode(b64urlToBytes(code.slice(5))));
+      if (a?.v !== 1 || typeof a.id !== 'string' || !shares[a.id]) {
+        unknown += 1;
+        continue;
+      }
+      const list = votes[a.id] || [];
+      if (list.some((x) => x.code === code)) continue;
+      list.push({
+        code,
+        pick: a.pick == null ? null : int(a.pick, 0, 0, 19),
+        rating: a.rating == null ? null : int(a.rating, 0, 1, 5),
+        stick: strv(a.stick).slice(0, 80),
+        comment: strv(a.comment).slice(0, 400),
+        name: strv(a.name).slice(0, 30),
+      });
+      votes[a.id] = list;
+      added += 1;
+    } catch (_) {
+      unknown += 1;
+    }
+  }
+  store.set('votes', votes);
+  $('vote-codes').value = '';
+  setStatus('vote-status', `${added}件の回答を読み込みました。${unknown ? `(${unknown}件は、この端末で作った共有リンクの回答ではないため読み込めませんでした)` : ''}`, added ? 'ok' : 'error');
+  renderVotes();
+  renderPrefCount();
+}
+
+function songFriendsSummary(songId) {
+  const shares = store.get('shares', {});
+  const votes = store.get('votes', {});
+  const list = Object.entries(shares)
+    .filter(([, sh]) => sh.kind === 'song' && sh.songId === songId)
+    .flatMap(([id]) => votes[id] || [])
+    .filter((v) => v.rating);
+  if (!list.length) return '';
+  const avg = list.reduce((a, v) => a + v.rating, 0) / list.length;
+  const notes = list.map((v) => v.comment || v.stick).filter(Boolean).slice(0, 5);
+  return `平均★${avg.toFixed(1)}(${list.length}人)${notes.length ? `。感想:${notes.join(' / ')}` : ''}`;
+}
+
+function renderVotes() {
+  const shares = store.get('shares', {});
+  const votes = store.get('votes', {});
+  const ids = Object.keys(shares).filter((id) => (votes[id] || []).length);
+  $('votes-view').innerHTML = ids.length
+    ? ids
+        .sort((a, b) => String(shares[b].createdAt).localeCompare(String(shares[a].createdAt)))
+        .map((id) => {
+          const sh = shares[id];
+          const list = votes[id];
+          const comments = list
+            .filter((v) => v.comment || v.stick)
+            .map((v) => `<li>${v.name ? `<b>${esc(v.name)}</b>:` : ''}${v.stick ? `「${esc(v.stick)}」 ` : ''}${esc(v.comment)}</li>`)
+            .join('');
+          if (sh.kind === 'hooks') {
+            const counts = arr(sh.items).map((_, i) => list.filter((v) => v.pick === i).length);
+            const max = Math.max(1, ...counts);
+            return `<div class="vote-card"><h4>${esc(sh.title)}(${list.length}人)</h4>
+              ${arr(sh.items)
+                .map((it, i) => `<div class="vote-bar"><div>${esc(it.label)} ${esc(strv(sh.labels?.[i]))}<div class="bar"><i style="width:${Math.round((counts[i] / max) * 100)}%"></i></div></div><span class="n">${counts[i]}票</span></div>`)
+                .join('')}
+              ${comments ? `<ul class="vote-comments">${comments}</ul>` : ''}</div>`;
+          }
+          const rated = list.filter((v) => v.rating);
+          const avg = rated.length ? (rated.reduce((a, v) => a + v.rating, 0) / rated.length).toFixed(1) : '–';
+          return `<div class="vote-card"><h4>「${esc(sh.title)}」v${int(sh.version, 1)}(${list.length}人・平均★${avg})</h4>
+            ${comments ? `<ul class="vote-comments">${comments}</ul>` : ''}</div>`;
+        })
+        .join('')
+    : '<div class="empty">まだ回答はありません。STEP 2 の候補や STEP 4 の曲から共有リンクを作れます。</div>';
+}
+
+// ---------- アルバム設計 ----------
+function albumSongs(project) {
+  const latest = {};
+  for (const h of store.get('history', [])) {
+    if (h.project !== project) continue;
+    const cur = latest[h.songId];
+    if (!cur || int(h.version, 1) > int(cur.version, 1)) latest[h.songId] = h;
+  }
+  return Object.values(latest).map((h) => {
+    const plan = sectionPlan(h.lyrics, { bpm: 100 });
+    const chorus = plan.find((s) => s.kind === 'chorus');
+    return {
+      ...h,
+      bpm: parseBpm(h.style),
+      chorus: chorus ? chorus.lines.join('\n') : '',
+      friends: songFriendsSummary(h.songId),
+    };
+  });
+}
+
+function renderAlbumProjects() {
+  const projects = projectsOf(store.get('history', []));
+  const cur = $('al-project').value;
+  $('al-project').innerHTML = projects.length
+    ? projects.map((p) => `<option ${p === cur ? 'selected' : ''}>${esc(p)}</option>`).join('')
+    : '<option value="">(プロジェクトがありません。STEP 4 でプロジェクト名を付けてください)</option>';
+}
+
+async function runAlbum() {
+  const project = $('al-project').value;
+  const songs = project ? albumSongs(project) : [];
+  if (songs.length < 2) {
+    setStatus('al-status', 'このプロジェクトの曲が2曲以上必要です。STEP 4 で曲にプロジェクト名を付けてください。', 'error');
+    return;
+  }
+  await withBusy('al-status', `Claude が ${songs.length} 曲のアルバムを設計しています`, async (onProgress) => {
+    showAlbum(await claude(P.systemForAlbum(), P.userForAlbum(project, songs), ALBUM_SCHEMA, onProgress), project);
+  });
+}
+
+function showAlbum(a, project) {
+  $('al-result').innerHTML = `
+    <div class="analysis">
+      <h3>アルバム設計:${esc(project || '')}</h3>
+      <p>${esc(a.concept)}</p>
+      <p class="hint">タイトル案:${arr(a.title_ideas).map(esc).join(' / ')}</p>
+      <h4>おすすめの曲順</h4>
+      <ol>${arr(a.order).map((o) => `<li><b>${esc(o.title)}</b>(${esc(o.role)})<br /><small>${esc(o.reason)}</small></li>`).join('')}</ol>
+      <h4>全体の偏り</h4><ul>${arr(a.balance).map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
+      ${arr(a.overlaps).length ? `<h4>似すぎている所</h4><ul>${arr(a.overlaps).map((o) => `<li><b>${esc(o.songs)}</b>:${esc(o.issue)}<br /><small>→ ${esc(o.fix)}</small></li>`).join('')}</ul>` : ''}
+      <div class="copy-field">
+        <div class="copy-head"><span>統一感を出す共通 Style</span><button type="button" id="al-copy-style">コピー</button></div>
+        <textarea rows="2" readonly>${esc(a.unified_style)}</textarea>
+      </div>
+      <p><b>足りない曲:</b>${esc(a.missing_song)}</p>
+    </div>`;
+  $('al-copy-style').onclick = () => copyText(strv(a.unified_style));
 }
 
 // ---------- はじめての案内・サンプル曲 ----------

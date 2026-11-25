@@ -509,6 +509,7 @@ ${rated
 メモ:${r.ratingNote || '(なし)'}
 Style:${r.style}
 採用した Style 案:${r.adoptedVariant || '(なし)'}
+友達の反応:${r.friends || '(なし)'}
 集計:${JSON.stringify(stats[i])}
 歌詞:
 ${r.lyrics}`,
@@ -551,6 +552,40 @@ ${song.lyrics}
 - その他:${extra.note || '(なし)'}
 
 リリース素材を作ってください。`;
+}
+
+// ---------- アルバム設計(Claude) ----------
+export function systemForAlbum() {
+  return `あなたは、アルバムを何枚も手がけてきた音楽プロデューサーです。
+同じプロジェクトの曲をまとめて見て、アルバムとしての曲順・バランス・重なりを設計します。
+
+# ルール
+- 曲順は、テンポ・ムード・感情の流れで「つかみ → 展開 → 休憩 → 山場 → 余韻」を作る。根拠を reason に書く。
+- 1曲目は最初の数秒で引き込める曲に。似たテンポ・同じモチーフ・同じ視点の曲を連続させない。
+- 重なり(overlaps)は、テーマ・モチーフ・サビの言葉・視点が似すぎている所を具体的に挙げ、差別化の方法を書く。
+- unified_style は、各曲の個性を消さない程度の共通要素(音色・ミックスの質感など)にとどめる(引き算)。
+- 評価(★)や友達の反応がある曲は、その結果も判断材料にする。
+
+${knowledgeForPrompt()}`;
+}
+
+export function userForAlbum(project, songs) {
+  return `# プロジェクト:${project}(${songs.length}曲)
+${songs
+  .map(
+    (s, i) => `## ${i + 1}. ${s.title}(v${s.version || 1})
+核:${s.core_message || '(不明)'}
+視点:${JSON.stringify(s.pov || {})}
+モチーフ:${(s.motifs || []).join('、') || '(なし)'}
+テンポ:${s.bpm ? `${s.bpm} BPM` : '(不明)'}
+Style:${s.style}
+評価:${s.rating ? `★${s.rating}` : '(なし)'}${s.friends ? `/友達:${s.friends}` : ''}
+サビ:
+${s.chorus || '(なし)'}`,
+  )
+  .join('\n\n')}
+
+アルバムとして設計してください。`;
 }
 
 // ---------- コピペモード用(APIキーなしで claude.ai / Gemini アプリに貼る) ----------

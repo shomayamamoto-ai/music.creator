@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>新曲の感想</title>
+  <meta name="robots" content="noindex" />
+  <link rel="icon" href="icons/favicon-32.png" sizes="32x32" />
+  <style>
+    /* 友達に送る投票ページ。サーバーには何も保存せず、結果は「コード」で作者に返してもらう */
+    :root {
+      --bg: #fdf4f0; --surface: #fffbf9; --ink: #3b2a27; --sub: #7d655f; --line: #efdcd5;
+      --gold: #c9a45c; --accent: #b4473b; --on-accent: #fff; --accent-soft: #fbe7e1;
+      --f-jp: 'Hiragino Sans', 'Yu Gothic', 'Noto Sans JP', system-ui, sans-serif;
+      --f-serif: 'Hiragino Mincho ProN', 'Yu Mincho', 'Noto Serif JP', serif;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #1c1416; --surface: #261b1e; --ink: #f3e7e2; --sub: #bfa59e; --line: #3d2b2f; --gold: #d9b872; --accent: #f08f80; --on-accent: #1b1414; --accent-soft: #40262a; color-scheme: dark; }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f-jp); font-size: 16px; line-height: 1.8;
+      word-break: auto-phrase; line-break: strict; overflow-wrap: anywhere;
+      padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+    main { max-width: 680px; margin: 0 auto; padding-block: 28px 80px; }
+    h1 { font-family: var(--f-serif); font-size: 24px; margin: 0 0 6px; text-wrap: balance; }
+    .eyebrow { font-size: 12px; letter-spacing: .2em; color: var(--sub); margin: 0; }
+    .lead { color: var(--sub); margin: 0 0 18px; }
+    .item { display: block; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin: 10px 0; background: var(--surface); cursor: pointer; }
+    .item input { margin-right: 8px; width: 20px; height: 20px; vertical-align: -4px; accent-color: var(--accent); }
+    .item:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+    .item b { font-family: var(--f-serif); }
+    .item pre { margin: 6px 0 0; white-space: pre-wrap; font-family: inherit; font-size: 15px; }
+    .stars { display: flex; gap: 2px; }
+    .stars button { width: 44px; height: 48px; border: 0; background: none; font-size: 30px; color: var(--line); cursor: pointer; padding: 0; }
+    .stars button.on { color: var(--gold); }
+    label.field { display: block; margin: 14px 0; font-size: 14px; font-weight: 700; color: var(--sub); }
+    input[type=text], textarea { width: 100%; font: inherit; font-size: 16px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-top: 4px; }
+    button.primary { min-height: 48px; padding: 0 22px; border-radius: 999px; border: 0; background: var(--accent); color: var(--on-accent); font: inherit; font-weight: 700; cursor: pointer; }
+    button.sub { min-height: 44px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+    .code { font-family: ui-monospace, Menlo, monospace; font-size: 13px; background: var(--surface); border: 1px dashed var(--accent); border-radius: 8px; padding: 10px 12px; word-break: break-all; margin: 10px 0; }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; }
+    .error { background: var(--accent-soft); border-radius: 8px; padding: 12px 14px; }
+    .note { font-size: 13px; color: var(--sub); }
+    [hidden] { display: none !important; }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  </style>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">MUSIC CREATOR</p>
+    <h1 id="title">新曲の感想を聞かせてください</h1>
+    <p class="lead" id="lead"></p>
+    <div id="error" class="error" hidden>このリンクは読み込めませんでした。送ってくれた人に、もう一度リンクを送ってもらってください。</div>
+
+    <form id="form" hidden>
+      <div id="items"></div>
+      <div id="rating-wrap" hidden>
+        <p class="field" style="margin-bottom:0">この曲は何点?</p>
+        <div class="stars" id="stars" role="group" aria-label="評価(★1〜5)"></div>
+      </div>
+      <label class="field" id="stick-wrap" hidden>一番耳に残った言葉・フレーズ
+        <input type="text" id="stick" maxlength="80" placeholder="例:一歩でいい" /></label>
+      <label class="field">感想(自由に・任意)
+        <textarea id="comment" rows="3" maxlength="400" placeholder="例:サビは好き。Aメロがちょっと長いかも"></textarea></label>
+      <label class="field">お名前(任意)
+        <input type="text" id="name" maxlength="30" placeholder="ニックネームでOK" /></label>
+      <button type="submit" class="primary">回答コードを作る</button>
+      <p class="note">回答はこの端末の外には送られません。次に表示される「回答コード」を、送ってくれた人に返してください。</p>
+    </form>
+
+    <section id="done" hidden>
+      <h2 style="font-family:var(--f-serif);font-size:20px">ありがとうございます!</h2>
+      <p>下の「回答コード」をコピーして、このリンクを送ってくれた人に返信してください。</p>
+      <div class="code" id="code"></div>
+      <div class="row">
+        <button type="button" class="sub" id="copy">コードをコピー</button>
+        <button type="button" class="sub" id="share" hidden>LINE などで送る</button>
+      </div>
+      <p class="note" id="copied" hidden>コピーしました。</p>
+    </section>
+  </main>
+  <script>
+    (function () {
+      // URL の # の後ろにある曲の情報を読む(圧縮されている場合は展開)
+      function b64urlToBytes(s) {
+        s = s.replace(/-/g, '+').replace(/_/g, '/');
+        while (s.length % 4) s += '=';
+        var bin = atob(s);
+        var out = new Uint8Array(bin.length);
+        for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+        return out;
+      }
+      function bytesToB64url(bytes) {
+        var bin = '';
+        for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+        return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      }
+      async function decode(hash) {
+        var m = hash.match(/^#([zj])=(.+)$/);
+        if (!m) throw new Error('no data');
+        var bytes = b64urlToBytes(m[2]);
+        if (m[1] === 'z') {
+          var stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+          bytes = new Uint8Array(await new Response(stream).arrayBuffer());
+        }
+        return JSON.parse(new TextDecoder().decode(bytes));
+      }
+      function el(tag, text) {
+        var e = document.createElement(tag);
+        if (text != null) e.textContent = String(text);
+        return e;
+      }
+      var data;
+      var rating = 0;
+      decode(location.hash)
+        .then(function (d) {
+          if (!d || d.v !== 1 || typeof d.id !== 'string' || !Array.isArray(d.items) || !d.items.length) throw new Error('bad');
+          data = d;
+          document.getElementById('title').textContent = String(d.title || '新曲の感想を聞かせてください').slice(0, 80);
+          document.getElementById('lead').textContent =
+            d.kind === 'hooks'
+              ? 'サビの候補です。一番いいと思うものを1つ選んでください(歌詞だけで大丈夫です)。'
+              : '新曲の歌詞です。読んで(聴いて)、感想を聞かせてください。';
+          var box = document.getElementById('items');
+          d.items.slice(0, 20).forEach(function (it, i) {
+            var label = el('label');
+            label.className = 'item';
+            if (d.kind === 'hooks') {
+              var r = document.createElement('input');
+              r.type = 'radio';
+              r.name = 'pick';
+              r.value = String(i);
+              label.appendChild(r);
+            }
+            label.appendChild(el('b', it.label || '案' + (i + 1)));
+            label.appendChild(el('pre', String(it.text || '').slice(0, 2000)));
+            box.appendChild(label);
+          });
+          if (d.kind !== 'hooks') {
+            document.getElementById('rating-wrap').hidden = false;
+            document.getElementById('stick-wrap').hidden = false;
+            var stars = document.getElementById('stars');
+            for (var n = 1; n <= 5; n++) {
+              (function (n) {
+                var b = el('button', '★');
+                b.type = 'button';
+                b.setAttribute('aria-label', '★' + n);
+                b.onclick = function () {
+                  rating = n;
+                  [].forEach.call(stars.children, function (x, i) { x.classList.toggle('on', i < n); });
+                };
+                stars.appendChild(b);
+              })(n);
+            }
+          }
+          document.getElementById('form').hidden = false;
+        })
+        .catch(function () {
+          document.getElementById('error').hidden = false;
+        });
+
+      document.getElementById('form').addEventListener('submit', function (e) {
+        e.preventDefault();
+        var pickEl = document.querySelector('input[name=pick]:checked');
+        if (data.kind === 'hooks' && !pickEl) { alert('一番いいと思う案を1つ選んでください'); return; }
+        if (data.kind !== 'hooks' && !rating) { alert('★で点数を付けてください'); return; }
+        var answer = {
+          v: 1,
+          id: data.id,
+          pick: pickEl ? Number(pickEl.value) : null,
+          rating: rating || null,
+          stick: document.getElementById('stick').value.trim().slice(0, 80),
+          comment: document.getElementById('comment').value.trim().slice(0, 400),
+          name: document.getElementById('name').value.trim().slice(0, 30),
+        };
+        var code = 'MCV1.' + bytesToB64url(new TextEncoder().encode(JSON.stringify(answer)));
+        document.getElementById('code').textContent = code;
+        document.getElementById('form').hidden = true;
+        document.getElementById('done').hidden = false;
+        var share = document.getElementById('share');
+        if (navigator.share) {
+          share.hidden = false;
+          share.onclick = function () { navigator.share({ text: code }).catch(function () {}); };
+        }
+        document.getElementById('copy').onclick = function () {
+          var done = function () { document.getElementById('copied').hidden = false; };
+          if (navigator.clipboard) navigator.clipboard.writeText(code).then(done, function () { selectCode(); });
+          else selectCode();
+        };
+        function selectCode() {
+          var r = document.createRange();
+          r.selectNodeContents(document.getElementById('code'));
+          var sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(r);
+        }
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+    })();
+  </script>
+</body>
+</html>

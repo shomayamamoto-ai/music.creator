@@ -382,12 +382,39 @@
             <div id="lr-status" class="status" hidden></div>
           </div>
 
+          <details class="timing-wrap" id="timing-wrap">
+            <summary>テンポと構成:DAW作業表・リズム確認</summary>
+            <div class="timing-controls">
+              <label class="field"><span>テンポ(BPM)</span><input id="t-bpm" type="number" min="40" max="240" inputmode="numeric" /></label>
+              <label class="field"><span>1行の長さ</span>
+                <select id="t-bpl"><option value="1">1小節(速い・詰めた歌)</option><option value="2" selected>2小節(標準)</option><option value="4">4小節(ゆったり)</option></select>
+              </label>
+            </div>
+            <p class="hint" id="t-note"></p>
+            <div class="timing-tabs" role="group" aria-label="表示の切り替え">
+              <button type="button" class="sub" data-tview="sheet" aria-pressed="true">DAW作業表</button>
+              <button type="button" class="sub" data-tview="rhythm" aria-pressed="false">リズム確認</button>
+            </div>
+            <div id="t-sheet"></div>
+            <div id="t-rhythm" hidden>
+              <p class="hint">メトロノームに合わせて、歌う行が光ります。1音を8分音符1つとして、行が枠に収まるかを確かめます。
+                「読み上げ」をオンにすると、端末の音声で歌詞を読み上げます(端末によっては日本語の音声がありません)。</p>
+              <div class="actions">
+                <button type="button" class="primary" id="t-play">再生</button>
+                <button type="button" class="sub" id="t-stop" disabled>停止</button>
+                <label class="check"><input type="checkbox" id="t-speak" /> 読み上げ</label>
+              </div>
+              <div id="t-lines"></div>
+            </div>
+          </details>
+
           <div class="next-box">
             <p class="next-head">次にやること</p>
             <div class="actions">
               <button class="primary" data-run="review">AI で厳しく推敲する(Claude)</button>
               <button class="primary ghost" id="o-to-enhance">Gemini で補強する</button>
               <button class="primary ghost" id="o-to-feedback">Suno で生成したら → 聴いて直す</button>
+              <button class="primary ghost" id="o-share">友達に感想を聞く(共有リンク)</button>
               <button class="sub" id="o-download">テキストで保存</button>
             </div>
             <details class="paste">
@@ -497,6 +524,33 @@
         <div id="history-view"></div>
         <div id="diff-view"></div>
 
+        <div class="sub-sec" id="album">
+          <h3>アルバム設計</h3>
+          <p class="hint">同じプロジェクトの曲(各曲の最新版)をまとめて見て、曲順・偏り・似すぎている所・統一感を出す Style を提案します。2曲以上で使えます。</p>
+          <label class="field"><span>プロジェクト</span><select id="al-project"></select></label>
+          <div class="actions">
+            <button class="primary ghost" data-run="album">アルバムとして設計する(Claude)</button>
+            <button class="sub" data-copy-prompt="album">キーなし:プロンプトをコピー</button>
+          </div>
+          <details class="paste">
+            <summary>APIキーなしで使う:返答を読み込む</summary>
+            <textarea id="al-paste" rows="3"></textarea>
+            <button class="sub" id="al-paste-load">読み込む</button>
+          </details>
+          <div id="al-status" class="status" hidden></div>
+          <div id="al-result"></div>
+        </div>
+
+        <div class="sub-sec" id="votes">
+          <h3>友達の反応</h3>
+          <p class="hint">友達に送った共有リンクから届いた「回答コード」(MCV1. で始まる文字)を貼り付けて読み込みます。
+            何人分でもまとめて貼れます。結果は好みの学習とアルバム設計にも使われます。</p>
+          <textarea id="vote-codes" rows="3" placeholder="MCV1.xxxx..."></textarea>
+          <div class="actions"><button class="sub" id="vote-load">回答コードを読み込む</button></div>
+          <div id="vote-status" class="status" hidden></div>
+          <div id="votes-view"></div>
+        </div>
+
         <div class="sub-sec">
           <h3>バックアップ・別の端末へ移す</h3>
           <p class="hint">曲・履歴・参考曲・学習結果・評価をファイルに書き出し、別の端末やブラウザで読み込めます。
@@ -590,6 +644,19 @@
     <span>新しい版があります。</span>
     <button type="button" id="update-apply">更新する</button>
   </div>
+  <dialog id="share-dialog" class="share-dialog" aria-labelledby="share-title">
+    <h3 id="share-title">友達に感想を聞く</h3>
+    <p class="hint" id="share-desc"></p>
+    <div class="code-box" id="share-link"></div>
+    <p class="warn-box" id="share-warn" hidden></p>
+    <div class="actions">
+      <button type="button" class="primary" id="share-copy">リンクをコピー</button>
+      <button type="button" class="sub" id="share-native" hidden>LINE などで送る</button>
+      <button type="button" class="sub" id="share-close">閉じる</button>
+    </div>
+    <p class="hint">友達がリンクを開いて答えると「回答コード」が表示されます。それを返してもらい、「作品と履歴」の「友達の反応」に貼ってください。
+      歌詞はリンクの中に入っているだけで、どこかのサーバーに保存されることはありません。</p>
+  </dialog>
   <div id="toast" role="status" aria-live="polite"></div>
   <script src="dist/app.js"></script>
 </body>
